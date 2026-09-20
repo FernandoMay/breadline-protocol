@@ -1,6 +1,7 @@
 [package]
 name = "breadline-escrow"
 version = "0.1.0"
+edition = "2021"
 description = "Breadline Micro-Escrow Smart Contract for Stellar Soroban"
 authors = ["Breadline Protocol"]
 license = "MIT"

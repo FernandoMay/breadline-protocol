@@ -124,7 +124,7 @@ impl BreadlineEscrow {
             .get(&ESCROW)
             .expect("Escrow not initialized");
 
-        let caller = envinvoker().authorized_address();
+        let caller = env.invoker().authorized_address();
         if caller != escrow.buyer && caller != escrow.seller {
             panic!("Only buyer or seller can request refund");
         }
