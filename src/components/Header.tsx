@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MOCK_USER } from '../lib/stellar';
+import { useStellarWallet } from '../hooks/useStellarWallet';
+import { truncateAddress } from '../lib/stellar';
+import Toast from './Toast';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
@@ -12,6 +15,23 @@ const navItems = [
 
 export default function Header() {
   const location = useLocation();
+  const wallet = useStellarWallet();
+
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const handleConnect = async () => {
+    const result = await wallet.connect();
+    if (!result.success && result.error) {
+      setToast({ message: result.error, type: 'error' });
+    } else {
+      setToast({ message: 'Wallet connected successfully', type: 'success' });
+    }
+  };
+
+  const handleDisconnect = () => {
+    wallet.disconnect();
+    setToast({ message: 'Wallet disconnected', type: 'info' });
+  };
 
   return (
     <header className="fixed top-0 w-full z-50 bg-surface-container-lowest/95 backdrop-blur-md border-b border-outline-variant/30 shadow-[0_1px_3px_rgba(11,28,48,0.04)]">
@@ -78,20 +98,48 @@ export default function Header() {
           <div className="h-6 w-px bg-outline-variant/40 hidden sm:block"></div>
 
           <div className="flex items-center gap-3 pl-1">
-            <div className="hidden md:flex flex-col text-right">
-              <span className="text-sm text-on-surface leading-tight font-semibold">{MOCK_USER.name}</span>
-              <span className="text-xs text-secondary leading-tight">{MOCK_USER.role} • BUE</span>
-            </div>
-            <div className="relative ring-1 ring-outline-variant/60 rounded-full p-0.5 bg-surface-container-lowest">
-              <img
-                alt="Profile"
-                className="w-8 h-8 rounded-full object-cover"
-                src={MOCK_USER.avatar}
-              />
-            </div>
+            {wallet.connected ? (
+              <>
+                <div className="hidden md:flex flex-col text-right">
+                  <span className="text-sm text-on-surface leading-tight font-semibold">{truncateAddress(wallet.address)}</span>
+                  <span className="text-xs text-secondary leading-tight">Connected • {wallet.network}</span>
+                </div>
+                <div className="relative ring-1 ring-tertiary/60 rounded-full p-0.5 bg-surface-container-lowest">
+                  <div className="w-8 h-8 rounded-full bg-tertiary-container flex items-center justify-center">
+                    <svg className="w-4 h-4 text-on-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                  </div>
+                </div>
+                <button
+                  onClick={handleDisconnect}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-error hover:bg-error/10 transition-colors cursor-pointer"
+                >
+                  Disconnect
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleConnect}
+                disabled={wallet.loading}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary text-sm font-semibold shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              >
+                {wallet.loading ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                )}
+                <span>Connect Wallet</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </header>
   );
 }

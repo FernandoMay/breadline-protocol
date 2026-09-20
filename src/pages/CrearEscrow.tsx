@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { COUNTRIES, calculateFee, calculateNet, formatUSDC, generateEscrowId } from '../lib/stellar';
+import { COUNTRIES, calculateFee, calculateNet, formatUSDC, generateEscrowId, generateContractHash } from '../lib/stellar';
+import { useStellarWallet } from '../hooks/useStellarWallet';
+import Toast from '../components/Toast';
 
 export default function CrearEscrow() {
   const [form, setForm] = useState({
@@ -19,6 +21,9 @@ export default function CrearEscrow() {
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const wallet = useStellarWallet();
 
   const amount = parseFloat(form.amount) || 0;
   const fee = calculateFee(amount);
@@ -27,17 +32,47 @@ export default function CrearEscrow() {
   const slug = form.clientName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 14) || 'client';
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(`https://breadline.fi/escrow/order-${orderId}-${slug}`);
+    const link = wallet.connected
+      ? `https://breadline.fi/escrow/order-${orderId}-${slug}?seller=${wallet.address}`
+      : `https://breadline.fi/escrow/order-${orderId}-${slug}`;
+    navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2800);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
+    if (!wallet.connected) {
+      setToast({ message: 'Connect your Freighter wallet first to create an escrow', type: 'error' });
+      return;
+    }
+
+    if (!form.clientName || !form.serviceTitle || !form.amount) {
+      setToast({ message: 'Fill in all required fields before generating', type: 'error' });
+      return;
+    }
+
     setGenerating(true);
-    setTimeout(() => {
+
+    // Simulate Soroban contract invocation
+    // In production, this would:
+    // 1. Build a Soroban invoke contract op via StellarSdk.SorobanRpc
+    // 2. Call create_escrow(buyer, seller, amount, deadline, description)
+    // 3. Sign with wallet.signTransaction(xdr)
+    // 4. Submit to network
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      const contractHash = generateContractHash();
+      console.log('Escrow created with seller wallet:', wallet.address);
+      console.log('Contract hash:', contractHash);
+
       setGenerating(false);
       setGenerated(true);
-    }, 2000);
+      setToast({ message: 'Escrow linked to your wallet address', type: 'success' });
+    } catch {
+      setGenerating(false);
+      setToast({ message: 'Failed to create escrow. Please try again.', type: 'error' });
+    }
   };
 
   return (
@@ -357,7 +392,11 @@ export default function CrearEscrow() {
               <span className="text-xs text-secondary uppercase font-semibold">Enlace público de pago para el cliente</span>
               <div className="flex items-center gap-2 bg-surface-container-lowest p-2 rounded-lg">
                 <svg className="w-5 h-5 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
-                <span className="font-code-md text-xs text-on-surface truncate select-all flex-1">breadline.fi/escrow/order-{orderId}-{slug}</span>
+                <span className="font-code-md text-xs text-on-surface truncate select-all flex-1">
+                  {wallet.connected
+                    ? `breadline.fi/escrow/order-${orderId}-${slug}?seller=${wallet.address.slice(0, 8)}`
+                    : `breadline.fi/escrow/order-${orderId}-${slug}`}
+                </span>
                 <button
                   className={`px-3 py-1 rounded font-label-sm text-xs font-semibold transition-all flex items-center gap-1 shrink-0 ${copied ? 'bg-tertiary text-on-tertiary' : 'bg-surface-container text-primary hover:bg-primary hover:text-on-primary'}`}
                   onClick={handleCopy}
@@ -477,6 +516,7 @@ export default function CrearEscrow() {
           </div>
         </div>
       </div>
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );
 }
