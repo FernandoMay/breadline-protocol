@@ -1,12 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
 import * as StellarSdk from '@stellar/stellar-sdk';
 
-interface Freighter {
+interface FreighterApi {
+  isConnected(): Promise<{ isConnected: boolean; error?: string }>;
   getAddress(): Promise<{ address: string }>;
+  getPublicKey(): Promise<{ address: string; error?: string }>;
   signTransaction(
     xdr: string,
-    opts?: { networkPassphrase?: string; accountToSign?: string }
-  ): Promise<string>;
+    opts?: { networkPassphrase?: string; network?: string; address?: string }
+  ): Promise<{ signedTxXdr: string; signerAddress: string; error?: string }>;
 }
 
 interface WalletBalance {
@@ -15,14 +17,19 @@ interface WalletBalance {
   issuer?: string;
 }
 
-function getFreighter(): Freighter | null {
+function getFreighter(): FreighterApi | null {
   if (typeof window === 'undefined') return null;
   const w = window as unknown as Record<string, unknown>;
-  const f = w.freighter;
+  // Freighter injects as window.freighterApi (not window.freighter)
+  const f = w.freighterApi;
   if (f && typeof f === 'object') {
     const obj = f as Record<string, unknown>;
-    if (typeof obj.getAddress === 'function' && typeof obj.signTransaction === 'function') {
-      return f as unknown as Freighter;
+    if (
+      typeof obj.getAddress === 'function' &&
+      typeof obj.signTransaction === 'function' &&
+      typeof obj.isConnected === 'function'
+    ) {
+      return f as unknown as FreighterApi;
     }
   }
   return null;
@@ -104,10 +111,14 @@ export function useStellarWallet() {
 
       try {
         setLoading(true);
-        const signedXdr = await freighter.signTransaction(xdr, {
+        const result = await freighter.signTransaction(xdr, {
           networkPassphrase: StellarSdk.Networks.TESTNET,
         });
-        return signedXdr;
+        if (result.error) {
+          setError(result.error);
+          return null;
+        }
+        return result.signedTxXdr;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to sign transaction';
         setError(message);

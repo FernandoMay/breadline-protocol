@@ -38,7 +38,7 @@ export default function Header() {
       <div className="h-20 w-full max-w-[1440px] mx-auto px-4 md:px-8 flex items-center justify-between gap-6">
         {/* Logo */}
         <div className="flex items-center gap-6 shrink-0">
-          <Link to="/dashboard" className="flex items-center gap-2">
+          <a href="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <svg className="w-5 h-5 text-on-primary" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
@@ -48,7 +48,7 @@ export default function Header() {
               <span className="text-headline-sm tracking-tight text-on-surface leading-none font-semibold">Breadline</span>
               <span className="text-[11px] text-secondary font-medium tracking-wide uppercase mt-0.5">Institutional Escrow</span>
             </div>
-          </Link>
+          </a>
           <div className="hidden xl:flex items-center gap-1 px-2 py-1 rounded-full bg-surface-container-low border border-outline-variant/40">
             <span className="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
             <span className="font-code-md text-xs text-on-surface-variant font-medium">Stellar Network • Testnet</span>
