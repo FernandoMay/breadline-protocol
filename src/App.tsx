@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
+import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
 import CrearEscrow from './pages/CrearEscrow';
 import VistaComprador from './pages/VistaComprador';
@@ -11,8 +12,12 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Landing page — no app shell */}
+        <Route path="/" element={<Landing />} />
+
+        {/* App pages — wrapped in Layout (Header + footer) */}
         <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/crear-escrow" element={<CrearEscrow />} />
           <Route path="/vista-comprador" element={<VistaComprador />} />
           <Route path="/sala-de-entrega" element={<SalaEntrega />} />
