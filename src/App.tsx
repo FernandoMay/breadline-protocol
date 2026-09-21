@@ -1,6 +1,5 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
-import Landing from './pages/Landing';
 import Dashboard from './pages/Dashboard';
 import CrearEscrow from './pages/CrearEscrow';
 import VistaComprador from './pages/VistaComprador';
@@ -10,10 +9,10 @@ import Certificados from './pages/Certificados';
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/app">
       <Routes>
-        {/* Landing page — no app shell */}
-        <Route path="/" element={<Landing />} />
+        {/* Root of /app redirects to dashboard */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
         {/* App pages — wrapped in Layout (Header + footer) */}
         <Route element={<Layout />}>
