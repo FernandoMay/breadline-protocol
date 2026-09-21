@@ -347,7 +347,7 @@ function EmptyState({ lang }: { lang: Language }) {
         {content.noEscrowDesc}
       </p>
       <a
-        href="/"
+        href="/app/crear-escrow"
         className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-label-md text-on-primary transition-colors hover:opacity-90"
       >
         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
