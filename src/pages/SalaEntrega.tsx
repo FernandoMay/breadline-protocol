@@ -504,6 +504,13 @@ export default function SalaEntrega() {
                       <p className="text-xs text-secondary text-center">Solo el comprador puede liberar fondos.</p>
                     )}
 
+                    {/* Deadline refund notice */}
+                    <div className="p-3 bg-secondary/5 rounded-lg border border-secondary/15">
+                      <p className="text-xs text-secondary leading-relaxed">
+                        <strong className="text-on-surface">Política de vencimiento:</strong> Si el comprador no responde antes del plazo, cualquiera de las partes puede ejecutar un reembolso manual usando el botón "Rechazar Entrega" a continuación. El contrato no ejecuta reembolsos automáticos — la acción requiere autorización explícita de buyer o seller.
+                      </p>
+                    </div>
+
                     <div className="flex items-center gap-2">
                       <button
                         className="flex-1 py-2.5 px-4 rounded-xl bg-surface-container text-on-surface text-xs font-semibold hover:bg-surface-container-high transition-colors border border-outline-variant/30 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -521,7 +528,7 @@ export default function SalaEntrega() {
                         disabled={!canAct || actionLoading !== null}
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                        {actionLoading === 'refund' ? 'Reembolsando...' : 'Rechazar Entrega'}
+                        {actionLoading === 'refund' ? 'Reembolsando...' : 'Rechazar Entrega / Reembolsar'}
                       </button>
                     </div>
                   </>
