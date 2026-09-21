@@ -9,7 +9,7 @@ export const sorobanServer = new StellarSdk.rpc.Server(SOROBAN_RPC_URL);
 export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
 
 // Deployed escrow contract on Testnet
-export const ESCROW_CONTRACT_ID = import.meta.env.VITE_ESCROW_CONTRACT_ID || 'CATDRV5A4GKMLVM3SJZNQ3HCCHTZ2OYQU7OBTIPKGMHYDQNZAQMYMT7G';
+export const ESCROW_CONTRACT_ID = import.meta.env.VITE_ESCROW_CONTRACT_ID || 'CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5';
 
 export const CURRENCIES = ['USDC', 'USD'] as const;
 

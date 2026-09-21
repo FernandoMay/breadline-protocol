@@ -16,6 +16,7 @@ pub enum EscrowError {
 }
 
 #[contracttype]
+#[derive(Debug)]
 pub enum EscrowState {
     Created,
     Funded,
@@ -25,6 +26,7 @@ pub enum EscrowState {
 }
 
 #[contracttype]
+#[derive(Debug)]
 pub struct Escrow {
     pub buyer: Address,
     pub seller: Address,
@@ -180,6 +182,29 @@ impl BreadlineEscrow {
             .ok_or(EscrowError::NotInitialized)?;
 
         Ok(env.ledger().timestamp() >= escrow.deadline)
+    }
+
+    /// Auto-refund if deadline has passed and escrow is still Funded.
+    /// No auth required — anyone can trigger this safety mechanism.
+    pub fn auto_refund_if_expired(env: Env) -> Result<Escrow, EscrowError> {
+        let mut escrow: Escrow = env
+            .storage()
+            .instance()
+            .get(&ESCROW_KEY)
+            .ok_or(EscrowError::NotInitialized)?;
+
+        if !matches!(escrow.state, EscrowState::Funded) {
+            return Err(EscrowError::InvalidState);
+        }
+
+        if env.ledger().timestamp() < escrow.deadline {
+            return Err(EscrowError::DeadlineNotPassed);
+        }
+
+        escrow.state = EscrowState::Refunded;
+        env.storage().instance().set(&ESCROW_KEY, &escrow);
+
+        Ok(escrow)
     }
 }
 

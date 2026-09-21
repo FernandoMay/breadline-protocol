@@ -10,14 +10,14 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 |-----------|-----|
 | **Landing Page** | [breadlineprotocol.netlify.app](https://breadlineprotocol.netlify.app/) |
 | **App (Dashboard)** | [breadlineprotocol.netlify.app/app](https://breadlineprotocol.netlify.app/app/dashboard) |
-| **Smart Contract** | [StellarExpert — CATDRV...MT7G](https://stellar.expert/explorer/testnet/contract/CATDRV5A4GKMLVM3SJZNQ3HCCHTZ2OYQU7OBTIPKGMHYDQNZAQMYMT7G) |
+| **Smart Contract** | [StellarExpert — CATDRV...MT7G](https://stellar.expert/explorer/testnet/contract/CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5) |
 | **GitHub** | [github.com/FernandoMay/breadline-protocol](https://github.com/FernandoMay/breadline-protocol) |
 
 ## Smart Contract
 
 **Contract ID (Testnet):**
 ```
-CATDRV5A4GKMLVM3SJZNQ3HCCHTZ2OYQU7OBTIPKGMHYDQNZAQMYMT7G
+CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5
 ```
 
 **Functions:**
@@ -66,7 +66,7 @@ The app will be available at `http://localhost:5173/app/dashboard`.
 Create a `.env` file with:
 
 ```
-VITE_ESCROW_CONTRACT_ID=CATDRV5A4GKMLVM3SJZNQ3HCCHTZ2OYQU7OBTIPKGMHYDQNZAQMYMT7G
+VITE_ESCROW_CONTRACT_ID=CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5
 ```
 
 ### Build & Deploy
@@ -177,5 +177,5 @@ MIT
 
 ## Contact
 
-- **Fernando May** — [fernando.may@outlook.com](mailto:fernando.may@outlook.com)
+- **Fernando May** — [fmayf130@gmail.com](mailto:fmayf130@gmail.com)
 - **GitHub:** [@FernandoMay](https://github.com/FernandoMay)

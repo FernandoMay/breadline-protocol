@@ -199,6 +199,13 @@ export async function raiseDisputeOnChain(
   return signAndSubmit(tx, signTransaction);
 }
 
+export async function autoRefundIfExpiredOnChain(
+  signTransaction: (xdr: string) => Promise<string | null>
+) {
+  const tx = await buildInvokeTx('auto_refund_if_expired');
+  return signAndSubmit(tx, signTransaction);
+}
+
 // ─── USDC helpers ───
 
 export function usdcToStroops(usdc: number): bigint {

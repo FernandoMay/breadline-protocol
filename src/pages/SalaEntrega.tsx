@@ -4,6 +4,7 @@ import {
   releaseFundsOnChain,
   refundEscrowOnChain,
   raiseDisputeOnChain,
+  autoRefundIfExpiredOnChain,
   formatScAmount,
   type OnChainEscrow,
   type OnChainEscrowState,
@@ -202,6 +203,23 @@ export default function SalaEntrega() {
     }
   }, [signTransaction, address, refreshAfterAction]);
 
+  const handleAutoRefund = useCallback(async () => {
+    if (!signTransaction) return;
+    setActionLoading('auto-refund');
+    try {
+      const result = await autoRefundIfExpiredOnChain(signTransaction);
+      if (result.success) {
+        await refreshAfterAction();
+      } else {
+        setError(result.error ?? 'Error al ejecutar auto-reembolso');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error al ejecutar auto-reembolso');
+    } finally {
+      setActionLoading(null);
+    }
+  }, [signTransaction, refreshAfterAction]);
+
   // ─── Chat ───
 
   const handleSend = () => {
@@ -225,6 +243,7 @@ export default function SalaEntrega() {
   const isBuyer = connected && escrow && address === escrow.buyer;
   const isSeller = connected && escrow && address === escrow.seller;
   const canAct = connected && (isBuyer || isSeller);
+  const isExpired = escrow && Date.now() >= Number(escrow.deadline) * 1000;
 
   // ─── Render ───
 
@@ -510,6 +529,18 @@ export default function SalaEntrega() {
                         <strong className="text-on-surface">Política de vencimiento:</strong> Si el comprador no responde antes del plazo, cualquiera de las partes puede ejecutar un reembolso manual usando el botón "Rechazar Entrega" a continuación. El contrato no ejecuta reembolsos automáticos — la acción requiere autorización explícita de buyer o seller.
                       </p>
                     </div>
+
+                    {/* Auto-refund button when expired */}
+                    {isExpired && (
+                      <button
+                        className="w-full py-3 px-4 rounded-xl bg-error hover:bg-error/90 text-on-error text-sm font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed"
+                        onClick={handleAutoRefund}
+                        disabled={actionLoading !== null}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        {actionLoading === 'auto-refund' ? 'Ejecutando...' : 'Ejecutar Auto-Reembolso por Vencimiento'}
+                      </button>
+                    )}
 
                     <div className="flex items-center gap-2">
                       <button
