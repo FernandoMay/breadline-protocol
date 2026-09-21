@@ -2,13 +2,15 @@ import * as StellarSdk from '@stellar/stellar-sdk';
 import type { EscrowOrder } from '../types';
 
 const HORIZON_URL = 'https://horizon-testnet.stellar.org';
+const SOROBAN_RPC_URL = 'https://soroban-testnet.stellar.org';
 
 export const server = new StellarSdk.Horizon.Server(HORIZON_URL);
+export const sorobanServer = new StellarSdk.rpc.Server(SOROBAN_RPC_URL);
 
 export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
 
-// Smart contract ID - will be set after deployment
-export const ESCROW_CONTRACT_ID = import.meta.env.VITE_ESCROW_CONTRACT_ID || '';
+// Deployed escrow contract on Testnet
+export const ESCROW_CONTRACT_ID = import.meta.env.VITE_ESCROW_CONTRACT_ID || 'CATDRV5A4GKMLVM3SJZNQ3HCCHTZ2OYQU7OBTIPKGMHYDQNZAQMYMT7G';
 
 export const CURRENCIES = ['USDC', 'USD'] as const;
 
@@ -174,3 +176,87 @@ export const MOCK_USER = {
   completedEscrows: 28,
   avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA2vROGcxJmm1KoHTtQaQbPuReQ0pwmBI088fx7HS4z0fsAKssSEjASrhIn4N4aAySCuy5hhpoa2LuT4GWOxeBmG14dR7cKBmv5_BCmvO-7Z-_VBCPcPUpawrfhPspKv3-zhwMSwzAm3x65qao1aJ2Xe42i31ne7pzbGOgQJnlGtpKlNxEjHA5k4EiBiwL3fHGNKCe0PSeHJGGH8to7kSdo7_iKpopHduGeLEKgbUOqaf7dweePFpW87g',
 };
+
+// ---- Soroban Contract Interaction Functions ----
+
+/**
+ * Build an XDR transaction to create an escrow on-chain.
+ * The wallet signs and submits this transaction.
+ */
+export function buildCreateEscrowTx(
+  buyerAddress: string,
+  sellerAddress: string,
+  amountStroops: number, // amount in stroops (1 USDC = 10,000,000 stroops)
+  deadlineTimestamp: number,
+  description: string,
+): StellarSdk.Transaction {
+  const contract = new StellarSdk.Contract(ESCROW_CONTRACT_ID);
+  const source = new StellarSdk.Account(buyerAddress, '0');
+
+  return new StellarSdk.TransactionBuilder(source, {
+    fee: StellarSdk.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      contract.call(
+        'create_escrow',
+        StellarSdk.nativeToScVal(buyerAddress, { type: 'address' }),
+        StellarSdk.nativeToScVal(sellerAddress, { type: 'address' }),
+        StellarSdk.nativeToScVal(BigInt(amountStroops), { type: 'i128' }),
+        StellarSdk.nativeToScVal(BigInt(deadlineTimestamp), { type: 'u64' }),
+        StellarSdk.nativeToScVal(description, { type: 'string' }),
+      ),
+    )
+    .setTimeout(180)
+    .build();
+}
+
+/**
+ * Build an XDR transaction to release funds from escrow.
+ */
+export function buildReleaseFundsTx(
+  buyerAddress: string,
+): StellarSdk.Transaction {
+  const contract = new StellarSdk.Contract(ESCROW_CONTRACT_ID);
+  const source = new StellarSdk.Account(buyerAddress, '0');
+
+  return new StellarSdk.TransactionBuilder(source, {
+    fee: StellarSdk.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call('release_funds'))
+    .setTimeout(180)
+    .build();
+}
+
+/**
+ * Build an XDR transaction to fund the escrow.
+ */
+export function buildFundEscrowTx(
+  buyerAddress: string,
+): StellarSdk.Transaction {
+  const contract = new StellarSdk.Contract(ESCROW_CONTRACT_ID);
+  const source = new StellarSdk.Account(buyerAddress, '0');
+
+  return new StellarSdk.TransactionBuilder(source, {
+    fee: StellarSdk.BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call('fund_escrow'))
+    .setTimeout(180)
+    .build();
+}
+
+/**
+ * Convert USDC amount to stroops (1 USDC = 10,000,000 stroops)
+ */
+export function usdcToStroops(usdc: number): number {
+  return Math.round(usdc * 10_000_000);
+}
+
+/**
+ * Convert stroops to USDC
+ */
+export function stroopsToUsdc(stroops: number): number {
+  return stroops / 10_000_000;
+}
