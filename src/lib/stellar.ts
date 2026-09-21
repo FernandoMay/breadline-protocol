@@ -1,5 +1,4 @@
 import * as StellarSdk from '@stellar/stellar-sdk';
-import type { EscrowOrder } from '../types';
 
 const HORIZON_URL = 'https://horizon-testnet.stellar.org';
 const SOROBAN_RPC_URL = 'https://soroban-testnet.stellar.org';
@@ -96,86 +95,6 @@ export function getStatusColor(status: string): string {
   };
   return colors[status] || 'bg-secondary/10 text-secondary';
 }
-
-// Mock data for demo
-export const MOCK_ORDERS: EscrowOrder[] = [
-  {
-    id: 'ORD-9482',
-    clientName: 'Austin Tech Partners',
-    clientEmail: 'billing@austintech.com',
-    clientCountry: 'US',
-    serviceTitle: 'Rediseño UI/UX App Mobile v3',
-    serviceDescription: 'Rediseño completo de la interfaz de usuario para aplicación móvil v3',
-    acceptanceCriteria: 'Entrega de componentes Figma, tokens de diseño y prototipo interactivo',
-    amount: 2850,
-    fee: 22.8,
-    netAmount: 2827.2,
-    deliveryDays: 15,
-    reviewDays: 3,
-    paymentMode: 'milestones',
-    milestones: [
-      { id: 'm1', label: 'Wireframes', percentage: 30, amount: 855, status: 'approved' },
-      { id: 'm2', label: 'Figma Tokens', percentage: 35, amount: 997.5, status: 'in_progress' },
-      { id: 'm3', label: 'Prototipo Final', percentage: 35, amount: 997.5, status: 'pending' },
-    ],
-    status: 'in_progress',
-    contractAddress: 'CC7A9B0284F1E93B92F2B48A10C892147D3A4B9F2B',
-    createdAt: '2025-03-10T14:20:00Z',
-    updatedAt: '2025-03-24T09:00:00Z',
-    deadline: '2025-04-24T23:59:59Z',
-  },
-  {
-    id: 'ORD-7731',
-    clientName: 'Nordic Dev Studio',
-    clientEmail: 'projects@nordicdev.se',
-    clientCountry: 'GB',
-    serviceTitle: 'Desarrollo API REST en Go',
-    serviceDescription: 'API REST completa para sistema de pagos',
-    acceptanceCriteria: 'API documentada con tests unitarios y de integración, deploy en staging',
-    amount: 1200,
-    fee: 9.6,
-    netAmount: 1190.4,
-    deliveryDays: 30,
-    reviewDays: 5,
-    paymentMode: 'single',
-    status: 'delivered',
-    contractAddress: 'CB8F3E2190A4D76B5C8E1234FEDCBA987654321AB',
-    createdAt: '2025-02-15T10:00:00Z',
-    updatedAt: '2025-03-22T16:30:00Z',
-    deadline: '2025-04-18T23:59:59Z',
-    reviewDeadline: '2025-03-27T23:59:59Z',
-  },
-  {
-    id: 'ORD-5520',
-    clientName: 'GrowthVentures',
-    clientEmail: 'ops@growthventures.ca',
-    clientCountry: 'CA',
-    serviceTitle: 'Campaña Q2 Performance',
-    serviceDescription: 'Estrategia y ejecución de campaña de marketing digital Q2',
-    acceptanceCriteria: 'Plan de campaña, creativos, configuración de ads y reporte de métricas',
-    amount: 800,
-    fee: 6.4,
-    netAmount: 793.6,
-    deliveryDays: 45,
-    reviewDays: 7,
-    paymentMode: 'single',
-    status: 'pending_deposit',
-    createdAt: '2025-03-20T08:00:00Z',
-    updatedAt: '2025-03-20T08:00:00Z',
-    deadline: '2025-05-05T23:59:59Z',
-  },
-];
-
-export const MOCK_USER = {
-  name: 'Camila Valenzuela',
-  role: 'Freelance Studio Lead',
-  walletAddress: 'GA4F8YTR2MKVIQXN7Z6H3K9B2C1D0EFGH876543210AB',
-  location: 'Buenos Aires, AR',
-  reputation: 99.4,
-  totalVolume: 74200,
-  completedEscrows: 28,
-  avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA2vROGcxJmm1KoHTtQaQbPuReQ0pwmBI088fx7HS4z0fsAKssSEjASrhIn4N4aAySCuy5hhpoa2LuT4GWOxeBmG14dR7cKBmv5_BCmvO-7Z-_VBCPcPUpawrfhPspKv3-zhwMSwzAm3x65qao1aJ2Xe42i31ne7pzbGOgQJnlGtpKlNxEjHA5k4EiBiwL3fHGNKCe0PSeHJGGH8to7kSdo7_iKpopHduGeLEKgbUOqaf7dweePFpW87g',
-};
 
 // ---- Soroban Contract Interaction Functions ----
 

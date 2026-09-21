@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { COUNTRIES, calculateFee, calculateNet, formatUSDC, generateEscrowId, generateContractHash } from '../lib/stellar';
+import { COUNTRIES, calculateFee, calculateNet, formatUSDC, ESCROW_CONTRACT_ID } from '../lib/stellar';
+import { createEscrowOnChain } from '../lib/contract';
 import { useStellarWallet } from '../hooks/useStellarWallet';
 import Toast from '../components/Toast';
 
@@ -21,6 +22,7 @@ export default function CrearEscrow() {
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [txHash, setTxHash] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const wallet = useStellarWallet();
@@ -28,13 +30,10 @@ export default function CrearEscrow() {
   const amount = parseFloat(form.amount) || 0;
   const fee = calculateFee(amount);
   const net = calculateNet(amount);
-  const orderId = generateEscrowId();
-  const slug = form.clientName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 14) || 'client';
-
   const handleCopy = () => {
     const link = wallet.connected
-      ? `https://breadline.fi/escrow/order-${orderId}-${slug}?seller=${wallet.address}`
-      : `https://breadline.fi/escrow/order-${orderId}-${slug}`;
+      ? `https://breadline.fi/escrow/${ESCROW_CONTRACT_ID}?seller=${wallet.address}`
+      : `https://breadline.fi/escrow/${ESCROW_CONTRACT_ID}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2800);
@@ -53,25 +52,28 @@ export default function CrearEscrow() {
 
     setGenerating(true);
 
-    // Simulate Soroban contract invocation
-    // In production, this would:
-    // 1. Build a Soroban invoke contract op via StellarSdk.SorobanRpc
-    // 2. Call create_escrow(buyer, seller, amount, deadline, description)
-    // 3. Sign with wallet.signTransaction(xdr)
-    // 4. Submit to network
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const result = await createEscrowOnChain(
+        wallet.address,
+        wallet.address,
+        parseFloat(form.amount),
+        Math.floor(Date.now() / 1000) + parseInt(form.deliveryDays) * 86400,
+        form.serviceTitle,
+        wallet.signTransaction,
+      );
 
-      const contractHash = generateContractHash();
-      console.log('Escrow created with seller wallet:', wallet.address);
-      console.log('Contract hash:', contractHash);
-
+      if (result.success && result.hash) {
+        setTxHash(result.hash);
+        setGenerated(true);
+        setToast({ message: `Escrow created on-chain! Tx: ${result.hash.slice(0, 12)}...`, type: 'success' });
+      } else {
+        setToast({ message: result.error || 'Transaction failed. Please try again.', type: 'error' });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unexpected error';
+      setToast({ message: `Failed to create escrow: ${msg}`, type: 'error' });
+    } finally {
       setGenerating(false);
-      setGenerated(true);
-      setToast({ message: 'Escrow linked to your wallet address', type: 'success' });
-    } catch {
-      setGenerating(false);
-      setToast({ message: 'Failed to create escrow. Please try again.', type: 'error' });
     }
   };
 
@@ -82,7 +84,7 @@ export default function CrearEscrow() {
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full bg-surface-container-high text-primary text-xs uppercase tracking-wider font-semibold">Generador de Pagos Seguros</span>
-            <span className="text-secondary">•</span>
+            <span className="text-secondary">&bull;</span>
             <span className="font-code-md text-xs text-secondary">Stellar Soroban Micro-Contract</span>
           </div>
           <h1 className="text-3xl text-on-surface tracking-tight font-bold">Nueva Orden de Custodia Comercial</h1>
@@ -213,7 +215,7 @@ export default function CrearEscrow() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-7 h-7 rounded-full bg-primary-container text-on-primary flex items-center justify-center text-xs font-bold">3</span>
-                <h2 className="text-lg text-on-surface font-semibold">Parámetros de Pago & Custodia</h2>
+                <h2 className="text-lg text-on-surface font-semibold">Parámetros de Pago &amp; Custodia</h2>
               </div>
               <div className="flex items-center gap-1 text-tertiary text-xs font-semibold">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
@@ -299,7 +301,7 @@ export default function CrearEscrow() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-7 h-7 rounded-full bg-primary-container text-on-primary flex items-center justify-center text-xs font-bold">4</span>
-                <h2 className="text-lg text-on-surface font-semibold">Arbitraje & Mediación</h2>
+                <h2 className="text-lg text-on-surface font-semibold">Arbitraje &amp; Mediación</h2>
               </div>
               <span className="text-xs text-tertiary font-semibold flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-tertiary"></span> Activo
@@ -359,7 +361,7 @@ export default function CrearEscrow() {
               ) : generated ? (
                 <>
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  <span>¡Enlace Listo & Blindado!</span>
+                  <span>¡Enlace Listo &amp; Blindado!</span>
                 </>
               ) : (
                 <>
@@ -381,21 +383,31 @@ export default function CrearEscrow() {
             {/* Status */}
             <div className="flex items-center justify-between pb-3">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-tertiary animate-pulse"></span>
-                <span className="text-xs text-tertiary font-bold tracking-wider uppercase">Orden Lista Para Despacho</span>
+                <span className={`w-2.5 h-2.5 rounded-full ${generated ? 'bg-tertiary' : 'bg-secondary animate-pulse'}`}></span>
+                <span className="text-xs text-tertiary font-bold tracking-wider uppercase">
+                  {generated ? 'Contrato Creado On-Chain' : 'Orden Lista Para Despacho'}
+                </span>
               </div>
-              <span className="font-code-md text-[11px] text-secondary bg-surface-container-low px-2 py-0.5 rounded">ID: #{orderId}</span>
+              {txHash && (
+                <span className="font-code-md text-[11px] text-secondary bg-surface-container-low px-2 py-0.5 rounded">
+                  Tx: {txHash.slice(0, 8)}...{txHash.slice(-4)}
+                </span>
+              )}
             </div>
 
             {/* Link Preview */}
             <div className="bg-surface-container-low p-3.5 rounded-xl flex flex-col gap-2">
-              <span className="text-xs text-secondary uppercase font-semibold">Enlace público de pago para el cliente</span>
+              <span className="text-xs text-secondary uppercase font-semibold">
+                {generated ? 'Contrato Soroban Desplegado' : 'Enlace público de pago para el cliente'}
+              </span>
               <div className="flex items-center gap-2 bg-surface-container-lowest p-2 rounded-lg">
                 <svg className="w-5 h-5 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
                 <span className="font-code-md text-xs text-on-surface truncate select-all flex-1">
-                  {wallet.connected
-                    ? `breadline.fi/escrow/order-${orderId}-${slug}?seller=${wallet.address.slice(0, 8)}`
-                    : `breadline.fi/escrow/order-${orderId}-${slug}`}
+                  {generated && txHash
+                    ? txHash
+                    : wallet.connected
+                      ? `breadline.fi/escrow/${ESCROW_CONTRACT_ID}?seller=${wallet.address.slice(0, 8)}`
+                      : `breadline.fi/escrow/${ESCROW_CONTRACT_ID}`}
                 </span>
                 <button
                   className={`px-3 py-1 rounded font-label-sm text-xs font-semibold transition-all flex items-center gap-1 shrink-0 ${copied ? 'bg-tertiary text-on-tertiary' : 'bg-surface-container text-primary hover:bg-primary hover:text-on-primary'}`}

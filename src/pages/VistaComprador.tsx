@@ -1,16 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  fetchEscrow,
+  fundEscrowOnChain,
+  formatScAmount,
+  type OnChainEscrow,
+  type OnChainEscrowState,
+} from '../lib/contract';
+import { ESCROW_CONTRACT_ID, truncateAddress } from '../lib/stellar';
+import { useStellarWallet } from '../hooks/useStellarWallet';
+
+// ─── Types ───
 
 type Language = 'es' | 'en';
 type PaymentTab = 'card' | 'crypto' | 'wallet';
-type FlowStatus = 'idle' | 'loading' | 'success';
+type FundStatus = 'idle' | 'loading' | 'success' | 'error';
+
+// ─── Translations ───
 
 const t = {
   es: {
     guaranteeStrip: 'Proteccion de Comprador Activa',
-    contractId: 'Contrato Soroban: CFXW7...B82K',
+    contractId: `Contrato Soroban: ${truncateAddress(ESCROW_CONTRACT_ID, 6)}`,
     heroTitle: 'Deposito Protegido en Garantia',
     heroDescription:
-      '$2,500 USDC seran bloqueados en un contrato inteligente de Soroban hasta que confirmes la entrega satisfactoria del servicio.',
+      'Los fondos seran bloqueados en un contrato inteligente de Soroban hasta que confirmes la entrega satisfactoria del servicio.',
     step1Label: 'Tu Depositas',
     step1Desc: 'Envias los fondos al contrato de custodia',
     step2Label: 'Proveedor Entrega',
@@ -28,49 +41,61 @@ const t = {
     cvcPlaceholder: '123',
     cryptoTitle: 'Deposita USDC a la direccion del contrato',
     copyAddress: 'Copiar Direccion',
-    copyMemo: 'Copiar Memo',
     memoLabel: 'Memo (obligatorio)',
-    depositAddress: 'Direccion de Deposito',
+    depositAddress: 'Direccion del Contrato',
     stellarNetwork: 'Red Stellar',
-    networkValue: 'Mainnet',
-    walletPasskey: 'Passkey / Biometria',
+    networkValue: 'Testnet',
     walletFreighter: 'Freighter Wallet',
-    walletPasskeyDesc: 'Aprobacion biometrica instantanea',
     walletFreighterDesc: 'Extension de navegador Stellar',
-    ctaLabel: 'Confirmar y Depositar $2,500.00 USDC en Custodia Segura',
+    ctaLabel: 'Confirmar y Depositar en Custodia Segura',
     ctaLoading: 'Procesando deposito...',
     ctaSuccess: 'Deposito Confirmado',
+    ctaConnectWallet: 'Conectar Wallet Primero',
     trustTitle: 'Tu Dinero esta Protegido',
     trustPoint1: 'Fondos bloqueados en contrato inteligente de Soroban',
     trustPoint2: 'Solo liberados con tu confirmacion explicita',
     trustPoint3: 'Auditado por el equipo de Breadline',
     trustPoint4: 'Resolucion de disputas en menos de 48 horas',
     sidebarSeller: 'Vendedor',
-    sidebarSellerName: 'Camila Valenzuela',
-    sidebarSellerCompany: 'Estudio Alfa',
-    sidebarSellerLocation: 'Buenos Aires, Argentina',
+    sidebarSellerAddress: 'Direccion del Vendedor',
     sidebarOrder: 'Detalles del Pedido',
-    sidebarService: 'Diseno de Interiores - Proyecto Completo',
+    sidebarService: 'Servicio',
     sidebarDeadline: 'Fecha Limite',
-    sidebarDeadlineValue: '15 Oct 2026',
+    sidebarAmount: 'Monto en Custodia',
     sidebarBreakdown: 'Desglose Financiero',
-    sidebarServiceValue: 'Servicio: $2,200.00',
-    sidebarProtectionFee: 'Proteccion: $200.00',
-    sidebarPlatformFee: 'Plataforma: $100.00',
     sidebarTotal: 'Total en Custodia',
-    sidebarTotalValue: '$2,500.00 USDC',
     sidebarSecurity: 'Seguridad',
     securityBadge1: 'Contrato Auditado',
     securityBadge2: 'Fondos Aislados',
     securityBadge3: 'Sin Acceso Centralizado',
     poweredBy: 'Powered by Stellar / Soroban',
+    noEscrowTitle: 'No hay escrow activo',
+    noEscrowDesc: 'Crea un escrow primero para poder depositar fondos en custodia segura.',
+    emptyStateAction: 'Crear Escrow',
+    stateLabel: 'Estado del Escrow',
+    buyerLabel: 'Comprador',
+    sellerLabel: 'Vendedor',
+    amountLabel: 'Monto',
+    deadlineLabel: 'Fecha Limite',
+    descriptionLabel: 'Descripcion del Servicio',
+    walletConnected: 'Wallet Conectada',
+    walletNotConnected: 'Wallet No Conectada',
+    connectWallet: 'Conectar Freighter',
+    disconnectWallet: 'Desconectar',
+    stateCreated: 'Creado — Pendiente de Deposito',
+    stateFunded: 'Fondos Depositados',
+    stateReleased: 'Fondos Liberados',
+    stateRefunded: 'Reembolsado',
+    stateDisputed: 'Disputa Activa',
+    fundError: 'Error al depositar fondos',
+    fundRetry: 'Reintentar',
   },
   en: {
     guaranteeStrip: 'Buyer Protection Active',
-    contractId: 'Soroban Contract: CFXW7...B82K',
+    contractId: `Soroban Contract: ${truncateAddress(ESCROW_CONTRACT_ID, 6)}`,
     heroTitle: 'Protected Deposit in Escrow',
     heroDescription:
-      '$2,500 USDC will be locked in a Soroban smart contract until you confirm satisfactory delivery of the service.',
+      'Funds will be locked in a Soroban smart contract until you confirm satisfactory delivery of the service.',
     step1Label: 'You Deposit',
     step1Desc: 'Send funds to the custody contract',
     step2Label: 'Provider Delivers',
@@ -88,48 +113,96 @@ const t = {
     cvcPlaceholder: '123',
     cryptoTitle: 'Deposit USDC to the contract address',
     copyAddress: 'Copy Address',
-    copyMemo: 'Copy Memo',
     memoLabel: 'Memo (required)',
-    depositAddress: 'Deposit Address',
+    depositAddress: 'Contract Address',
     stellarNetwork: 'Stellar Network',
-    networkValue: 'Mainnet',
-    walletPasskey: 'Passkey / Biometrics',
+    networkValue: 'Testnet',
     walletFreighter: 'Freighter Wallet',
-    walletPasskeyDesc: 'Instant biometric approval',
     walletFreighterDesc: 'Stellar browser extension',
-    ctaLabel: 'Confirm and Deposit $2,500.00 USDC in Secure Custody',
+    ctaLabel: 'Confirm and Deposit in Secure Custody',
     ctaLoading: 'Processing deposit...',
     ctaSuccess: 'Deposit Confirmed',
+    ctaConnectWallet: 'Connect Wallet First',
     trustTitle: 'Your Money is Protected',
     trustPoint1: 'Funds locked in Soroban smart contract',
     trustPoint2: 'Only released with your explicit confirmation',
     trustPoint3: 'Audited by the Breadline team',
     trustPoint4: 'Dispute resolution in under 48 hours',
     sidebarSeller: 'Seller',
-    sidebarSellerName: 'Camila Valenzuela',
-    sidebarSellerCompany: 'Estudio Alfa',
-    sidebarSellerLocation: 'Buenos Aires, Argentina',
+    sidebarSellerAddress: 'Seller Address',
     sidebarOrder: 'Order Details',
-    sidebarService: 'Interior Design - Full Project',
+    sidebarService: 'Service',
     sidebarDeadline: 'Deadline',
-    sidebarDeadlineValue: 'Oct 15, 2026',
+    sidebarAmount: 'Amount in Custody',
     sidebarBreakdown: 'Financial Breakdown',
-    sidebarServiceValue: 'Service: $2,200.00',
-    sidebarProtectionFee: 'Protection: $200.00',
-    sidebarPlatformFee: 'Platform: $100.00',
     sidebarTotal: 'Total in Custody',
-    sidebarTotalValue: '$2,500.00 USDC',
     sidebarSecurity: 'Security',
     securityBadge1: 'Audited Contract',
     securityBadge2: 'Isolated Funds',
     securityBadge3: 'No Centralized Access',
     poweredBy: 'Powered by Stellar / Soroban',
+    noEscrowTitle: 'No active escrow',
+    noEscrowDesc: 'Create an escrow first to deposit funds into secure custody.',
+    emptyStateAction: 'Create Escrow',
+    stateLabel: 'Escrow State',
+    buyerLabel: 'Buyer',
+    sellerLabel: 'Seller',
+    amountLabel: 'Amount',
+    deadlineLabel: 'Deadline',
+    descriptionLabel: 'Service Description',
+    walletConnected: 'Wallet Connected',
+    walletNotConnected: 'Wallet Not Connected',
+    connectWallet: 'Connect Freighter',
+    disconnectWallet: 'Disconnect',
+    stateCreated: 'Created — Pending Deposit',
+    stateFunded: 'Funds Deposited',
+    stateReleased: 'Funds Released',
+    stateRefunded: 'Refunded',
+    stateDisputed: 'Dispute Active',
+    fundError: 'Error depositing funds',
+    fundRetry: 'Retry',
   },
 } as const;
 
-const STELLAR_ADDRESS = 'GCF4A2Z6BMEF7A6E3H2L9W5K8X1R0T6Y4U7I3O2P1S0D9F8G7H6J5K4L3M2N1W38K9X2B';
-const STELLAR_ADDRESS_SHORT = 'GCF4A2Z6...W38K9X2B';
-const MEMO = '8849201';
+// ─── Helpers ───
+
+function formatDeadline(ts: bigint): string {
+  const date = new Date(Number(ts) * 1000);
+  return date.toLocaleDateString('es-AR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function stateColor(state: OnChainEscrowState): string {
+  const map: Record<OnChainEscrowState, string> = {
+    Created: 'bg-secondary/10 text-secondary',
+    Funded: 'bg-primary/10 text-primary',
+    Released: 'bg-tertiary/10 text-tertiary',
+    Refunded: 'bg-secondary/10 text-secondary',
+    Disputed: 'bg-error/10 text-error',
+  };
+  return map[state] ?? 'bg-secondary/10 text-secondary';
+}
+
+function stateLabelKey(state: OnChainEscrowState): string {
+  const map: Record<OnChainEscrowState, keyof typeof t.es> = {
+    Created: 'stateCreated',
+    Funded: 'stateFunded',
+    Released: 'stateReleased',
+    Refunded: 'stateRefunded',
+    Disputed: 'stateDisputed',
+  };
+  return map[state] ?? 'stateCreated';
+}
+
+function shortenAddress(addr: string): string {
+  if (!addr || addr.length < 12) return addr;
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
+// ─── Sub-components ───
 
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
@@ -256,17 +329,90 @@ function StepperIcon({ step }: { step: number }) {
   return icons[step] || null;
 }
 
+// ─── Empty State ───
+
+function EmptyState({ lang }: { lang: Language }) {
+  const content = t[lang];
+  return (
+    <div className="flex flex-col items-center justify-center py-20 px-6">
+      <div className="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center mb-6">
+        <svg className="w-8 h-8 text-tertiary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
+        </svg>
+      </div>
+      <h2 className="font-headline-sm text-xl font-semibold text-on-surface mb-2">
+        {content.noEscrowTitle}
+      </h2>
+      <p className="font-body-md text-secondary text-center max-w-sm mb-6">
+        {content.noEscrowDesc}
+      </p>
+      <a
+        href="/"
+        className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 font-label-md text-on-primary transition-colors hover:opacity-90"
+      >
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        {content.emptyStateAction}
+      </a>
+    </div>
+  );
+}
+
+// ─── Main Component ───
+
 export default function VistaComprador() {
   const [lang, setLang] = useState<Language>('es');
   const [activeTab, setActiveTab] = useState<PaymentTab>('card');
-  const [flowStatus, setFlowStatus] = useState<FlowStatus>('idle');
+  const [escrow, setEscrow] = useState<OnChainEscrow | null>(null);
+  const [escrowLoading, setEscrowLoading] = useState(true);
+  const [fundStatus, setFundStatus] = useState<FundStatus>('idle');
+  const [fundError, setFundError] = useState<string | null>(null);
+
+  const wallet = useStellarWallet();
   const content = t[lang];
 
-  const handleDeposit = () => {
-    setFlowStatus('loading');
-    setTimeout(() => setFlowStatus('success'), 2500);
+  // Fetch escrow on mount
+  const loadEscrow = useCallback(async () => {
+    setEscrowLoading(true);
+    try {
+      const data = await fetchEscrow();
+      setEscrow(data);
+    } catch {
+      // Error handled by empty escrow state
+    } finally {
+      setEscrowLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadEscrow();
+  }, [loadEscrow]);
+
+  // Fund escrow handler
+  const handleFund = async () => {
+    if (!wallet.connected || !wallet.signTransaction) return;
+
+    setFundStatus('loading');
+    setFundError(null);
+
+    try {
+      const result = await fundEscrowOnChain(wallet.signTransaction);
+      if (result.success) {
+        setFundStatus('success');
+        // Re-fetch escrow to update state
+        await loadEscrow();
+      } else {
+        setFundStatus('error');
+        setFundError(result.error ?? 'Transaction failed');
+      }
+    } catch (err) {
+      setFundStatus('error');
+      setFundError(err instanceof Error ? err.message : 'Unexpected error');
+    }
   };
 
+  // Tabs config
   const tabs: { id: PaymentTab; label: string }[] = [
     { id: 'card', label: content.tabCard },
     { id: 'crypto', label: content.tabCrypto },
@@ -285,6 +431,70 @@ export default function VistaComprador() {
     content.securityBadge2,
     content.securityBadge3,
   ];
+
+  const canFund = escrow?.state === 'Created' && wallet.connected;
+  const isFunded = escrow?.state !== 'Created';
+
+  // ─── Loading state ───
+  if (escrowLoading) {
+    return (
+      <div className="min-h-screen bg-surface-container-lowest text-on-surface font-body-md flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <svg className="w-8 h-8 animate-spin text-primary" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <span className="font-label-md text-secondary">Cargando escrow...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── No escrow state ───
+  if (!escrow) {
+    return (
+      <div className="min-h-screen bg-surface-container-lowest text-on-surface font-body-md">
+        {/* Guarantee Strip */}
+        <div className="w-full bg-tertiary text-on-tertiary-container px-4 py-2">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+              </svg>
+              <span className="font-label-sm">{content.guaranteeStrip}</span>
+            </div>
+            <span className="font-code-md text-xs opacity-80 hidden sm:inline">{content.contractId}</span>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 py-6 lg:py-10">
+          {/* Top bar */}
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-2">
+              <svg className="w-6 h-6 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.75c0 .415.336.75.75.75z" />
+              </svg>
+              <span className="font-headline-sm text-primary font-semibold">Breadline</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLang(lang === 'es' ? 'en' : 'es')}
+              className="inline-flex items-center gap-1.5 rounded-full bg-surface-container-high px-3 py-1.5 text-sm font-label-sm text-secondary transition-colors hover:bg-surface-container"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+              </svg>
+              {lang === 'es' ? 'EN' : 'ES'}
+            </button>
+          </div>
+
+          <EmptyState lang={lang} />
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Escrow loaded ───
 
   return (
     <div className="min-h-screen bg-surface-container-lowest text-on-surface font-body-md">
@@ -327,12 +537,47 @@ export default function VistaComprador() {
           <div className="flex-1 min-w-0">
             {/* Hero */}
             <section className="mb-10">
-              <h1 className="font-headline-sm text-3xl font-bold text-on-surface mb-3">
-                {content.heroTitle}
-              </h1>
+              <div className="flex items-center gap-3 mb-3">
+                <h1 className="font-headline-sm text-3xl font-bold text-on-surface">
+                  {content.heroTitle}
+                </h1>
+                <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-label-sm ${stateColor(escrow.state)}`}>
+                  {content[stateLabelKey(escrow.state) as keyof typeof content]}
+                </span>
+              </div>
               <p className="font-body-lg text-secondary max-w-2xl">
                 {content.heroDescription}
               </p>
+            </section>
+
+            {/* On-chain data card */}
+            <section className="mb-10">
+              <div className="bg-surface-container-low rounded-xl p-6 border border-surface-container">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <p className="font-label-sm text-secondary mb-1">{content.buyerLabel}</p>
+                    <p className="font-code-md text-sm text-on-surface break-all">{escrow.buyer}</p>
+                  </div>
+                  <div>
+                    <p className="font-label-sm text-secondary mb-1">{content.sellerLabel}</p>
+                    <p className="font-code-md text-sm text-on-surface break-all">{escrow.seller}</p>
+                  </div>
+                  <div>
+                    <p className="font-label-sm text-secondary mb-1">{content.amountLabel}</p>
+                    <p className="font-headline-sm text-xl font-bold text-primary">{formatScAmount(escrow.amount)}</p>
+                  </div>
+                  <div>
+                    <p className="font-label-sm text-secondary mb-1">{content.deadlineLabel}</p>
+                    <p className="font-body-md text-on-surface">{formatDeadline(escrow.deadline)}</p>
+                  </div>
+                  {escrow.service_description && (
+                    <div className="sm:col-span-2">
+                      <p className="font-label-sm text-secondary mb-1">{content.descriptionLabel}</p>
+                      <p className="font-body-md text-on-surface">{escrow.service_description}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </section>
 
             {/* 3-Step Pipeline */}
@@ -434,16 +679,9 @@ export default function VistaComprador() {
                         <p className="font-label-sm text-secondary mb-1">{content.depositAddress}</p>
                         <div className="flex items-center gap-2 bg-surface-container-lowest rounded-lg border border-surface-container px-4 py-3">
                           <span className="font-code-md text-sm text-on-surface break-all flex-1">
-                            {STELLAR_ADDRESS_SHORT}
+                            {truncateAddress(ESCROW_CONTRACT_ID, 8)}
                           </span>
-                          <CopyButton text={STELLAR_ADDRESS} label={content.copyAddress} />
-                        </div>
-                      </div>
-                      <div>
-                        <p className="font-label-sm text-secondary mb-1">{content.memoLabel}</p>
-                        <div className="flex items-center gap-2 bg-surface-container-lowest rounded-lg border border-surface-container px-4 py-3">
-                          <span className="font-code-md text-on-surface">{MEMO}</span>
-                          <CopyButton text={MEMO} label={content.copyMemo} />
+                          <CopyButton text={ESCROW_CONTRACT_ID} label={content.copyAddress} />
                         </div>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-tertiary">
@@ -459,40 +697,58 @@ export default function VistaComprador() {
               {/* Wallet Tab */}
               {activeTab === 'wallet' && (
                 <div className="bg-surface-container-low rounded-xl p-6 border border-surface-container space-y-4">
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-4 rounded-xl bg-surface-container-lowest border border-surface-container px-5 py-4 transition-colors hover:bg-surface-container"
-                  >
-                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-tertiary-container text-on-tertiary-container flex items-center justify-center">
-                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
-                      </svg>
-                    </div>
-                    <div className="text-left">
-                      <p className="font-label-md text-on-surface">{content.walletPasskey}</p>
-                      <p className="font-body-sm text-secondary">{content.walletPasskeyDesc}</p>
-                    </div>
-                    <svg className="w-5 h-5 text-tertiary ml-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full flex items-center gap-4 rounded-xl bg-surface-container-lowest border border-surface-container px-5 py-4 transition-colors hover:bg-surface-container"
-                  >
+                  {/* Freighter wallet */}
+                  <div className="w-full flex items-center gap-4 rounded-xl bg-surface-container-lowest border border-surface-container px-5 py-4">
                     <div className="flex-shrink-0 w-10 h-10 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center">
                       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
                       </svg>
                     </div>
-                    <div className="text-left">
+                    <div className="text-left flex-1">
                       <p className="font-label-md text-on-surface">{content.walletFreighter}</p>
                       <p className="font-body-sm text-secondary">{content.walletFreighterDesc}</p>
                     </div>
-                    <svg className="w-5 h-5 text-tertiary ml-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                    </svg>
-                  </button>
+                    {wallet.connected ? (
+                      <div className="flex items-center gap-2">
+                        <span className="font-code-md text-xs text-primary">{shortenAddress(wallet.address)}</span>
+                        <button
+                          type="button"
+                          onClick={wallet.disconnect}
+                          className="text-xs font-label-sm text-secondary hover:text-on-surface transition-colors"
+                        >
+                          {content.disconnectWallet}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={wallet.connect}
+                        disabled={wallet.loading}
+                        className="rounded-lg bg-primary px-4 py-2 font-label-sm text-on-primary transition-colors hover:opacity-90 disabled:opacity-50"
+                      >
+                        {wallet.loading ? '...' : content.connectWallet}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Wallet status */}
+                  {wallet.connected && (
+                    <div className="flex items-center gap-2 rounded-lg bg-tertiary-container/30 px-4 py-2">
+                      <svg className="w-4 h-4 text-tertiary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="font-label-sm text-on-tertiary-container">{content.walletConnected}</span>
+                    </div>
+                  )}
+
+                  {wallet.error && (
+                    <div className="flex items-center gap-2 rounded-lg bg-error/10 px-4 py-2">
+                      <svg className="w-4 h-4 text-error" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
+                      </svg>
+                      <span className="font-label-sm text-error">{wallet.error}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </section>
@@ -501,16 +757,22 @@ export default function VistaComprador() {
             <section className="mb-10">
               <button
                 type="button"
-                onClick={handleDeposit}
-                disabled={flowStatus === 'loading'}
+                onClick={handleFund}
+                disabled={!canFund || fundStatus === 'loading'}
                 className={`w-full py-4 rounded-xl font-label-lg transition-all ${
-                  flowStatus === 'success'
+                  fundStatus === 'success'
                     ? 'bg-tertiary text-on-tertiary-container'
-                    : 'bg-primary text-on-primary hover:opacity-90'
-                } ${flowStatus === 'loading' ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    : isFunded
+                    ? 'bg-surface-container-high text-secondary cursor-not-allowed'
+                    : canFund
+                    ? 'bg-primary text-on-primary hover:opacity-90'
+                    : 'bg-surface-container-high text-secondary cursor-not-allowed'
+                } ${fundStatus === 'loading' ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
-                {flowStatus === 'idle' && content.ctaLabel}
-                {flowStatus === 'loading' && (
+                {fundStatus === 'idle' && !wallet.connected && content.ctaConnectWallet}
+                {fundStatus === 'idle' && wallet.connected && !isFunded && content.ctaLabel}
+                {fundStatus === 'idle' && isFunded && content[stateLabelKey(escrow.state) as keyof typeof content]}
+                {fundStatus === 'loading' && (
                   <span className="inline-flex items-center gap-2">
                     <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -519,7 +781,7 @@ export default function VistaComprador() {
                     {content.ctaLoading}
                   </span>
                 )}
-                {flowStatus === 'success' && (
+                {fundStatus === 'success' && (
                   <span className="inline-flex items-center gap-2">
                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -527,7 +789,29 @@ export default function VistaComprador() {
                     {content.ctaSuccess}
                   </span>
                 )}
+                {fundStatus === 'error' && (
+                  <span className="inline-flex items-center gap-2">
+                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                    </svg>
+                    {content.fundError}
+                  </span>
+                )}
               </button>
+
+              {/* Fund error detail */}
+              {fundStatus === 'error' && fundError && (
+                <div className="mt-3 flex items-center gap-2 rounded-lg bg-error/10 px-4 py-2">
+                  <span className="font-body-sm text-error">{fundError}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setFundStatus('idle'); setFundError(null); }}
+                    className="ml-auto font-label-sm text-primary hover:opacity-80"
+                  >
+                    {content.fundRetry}
+                  </button>
+                </div>
+              )}
             </section>
 
             {/* Trust / Security Section */}
@@ -560,32 +844,30 @@ export default function VistaComprador() {
               <p className="font-label-sm text-secondary mb-3">{content.sidebarSeller}</p>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-label-md">
-                  CV
+                  {escrow.seller ? escrow.seller.slice(0, 2).toUpperCase() : '??'}
                 </div>
-                <div>
-                  <p className="font-label-md text-on-surface">{content.sidebarSellerName}</p>
-                  <p className="font-body-sm text-secondary">{content.sidebarSellerCompany}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="font-code-md text-sm text-on-surface break-all">{shortenAddress(escrow.seller)}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 mt-3 text-xs text-tertiary">
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
-                </svg>
-                <span className="font-label-sm">{content.sidebarSellerLocation}</span>
+              <div className="mt-3">
+                <p className="font-label-sm text-secondary mb-1">{content.sidebarSellerAddress}</p>
+                <p className="font-code-md text-xs text-on-surface break-all">{escrow.seller}</p>
               </div>
             </div>
 
             {/* Order Details */}
             <div className="bg-surface-container-low rounded-xl p-5 border border-surface-container">
               <p className="font-label-sm text-secondary mb-3">{content.sidebarOrder}</p>
-              <p className="font-body-md text-on-surface">{content.sidebarService}</p>
+              <p className="font-body-md text-on-surface">
+                {escrow.service_description || content.sidebarService}
+              </p>
               <div className="flex items-center gap-2 mt-3 text-xs text-tertiary">
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                 </svg>
                 <span className="font-label-sm">{content.sidebarDeadline}</span>
-                <span className="font-label-sm text-on-surface">{content.sidebarDeadlineValue}</span>
+                <span className="font-label-sm text-on-surface">{formatDeadline(escrow.deadline)}</span>
               </div>
             </div>
 
@@ -594,17 +876,12 @@ export default function VistaComprador() {
               <p className="font-label-sm text-secondary mb-3">{content.sidebarBreakdown}</p>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="font-body-sm text-secondary">{content.sidebarServiceValue}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-body-sm text-secondary">{content.sidebarProtectionFee}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="font-body-sm text-secondary">{content.sidebarPlatformFee}</span>
+                  <span className="font-body-sm text-secondary">{content.amountLabel}</span>
+                  <span className="font-body-sm text-on-surface font-medium">{formatScAmount(escrow.amount)}</span>
                 </div>
                 <div className="border-t border-surface-container my-2 pt-2">
                   <p className="font-label-sm text-secondary">{content.sidebarTotal}</p>
-                  <p className="font-headline-sm text-xl font-bold text-primary mt-1">{content.sidebarTotalValue}</p>
+                  <p className="font-headline-sm text-xl font-bold text-primary mt-1">{formatScAmount(escrow.amount)}</p>
                 </div>
               </div>
             </div>
