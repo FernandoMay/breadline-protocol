@@ -111,7 +111,7 @@ export default function Landing() {
           <div className="flex flex-col gap-6">
             <div className="inline-flex items-center gap-2 self-start px-3 py-1.5 rounded-full bg-surface-container-low border border-outline-variant/40 text-xs font-semibold text-primary">
               <span className="w-2 h-2 rounded-full bg-tertiary animate-pulse" />
-              Stellar Network · Mainnet
+              Prototype · Stellar Testnet · Soroban
             </div>
 
             <h1 className="text-4xl md:text-5xl lg:text-headline-xl font-bold leading-tight tracking-tight">
@@ -138,7 +138,7 @@ export default function Landing() {
             <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-secondary">
               <span className="inline-flex items-center gap-1.5">
                 <Icon name="verified" filled />
-                Auditoría institucional activa
+                Código auditable · Auditoría planificada
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Icon name="lock" filled />
@@ -146,7 +146,7 @@ export default function Landing() {
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Icon name="bolt" filled />
-                Liquidación &lt;3.5s
+                Liquidación median testnet &lt;3.5s*
               </span>
             </div>
           </div>
@@ -161,7 +161,7 @@ export default function Landing() {
                     <Icon name="gavel" filled />
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-bold text-on-surface">Escrow #9482</span>
+                    <span className="text-sm font-bold text-on-surface">Escrow #9482 (demo · Testnet)</span>
                     <span className="font-code-md text-[11px] text-secondary">Soroban Smart Contract</span>
                   </div>
                 </div>
@@ -175,7 +175,7 @@ export default function Landing() {
               <div className="px-6 py-5 flex flex-col gap-4">
                 {/* Amount */}
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs text-secondary uppercase tracking-wider font-semibold">Monto Bloqueado</span>
+                  <span className="text-xs text-secondary uppercase tracking-wider font-semibold">Monto en escrow programable (demo) · Testnet — Transacción demo, fondos no reales</span>
                   <span className="text-3xl font-bold text-on-surface font-code-md">$2,500.00 <span className="text-sm font-semibold text-secondary">USDC</span></span>
                 </div>
 
@@ -239,8 +239,8 @@ export default function Landing() {
       <section className="py-12 px-6 border-y border-outline-variant/20 bg-surface-container-low/50">
         <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
           {[
-            { value: '$18.4M+', label: 'Volumen total procesado', icon: 'trending_up' },
-            { value: '<3.5s', label: 'Tiempo promedio de liquidación', icon: 'bolt' },
+            { value: '$18.4M+*', label: 'Volumen objetivo (simulado)*', icon: 'trending_up' },
+            { value: '<3.5s*', label: 'Median testnet settlement (Soroban)*', icon: 'bolt' },
             { value: '$0.00001', label: 'Costo por transacción en Stellar', icon: 'savings' },
             { value: '0', label: 'Contracargos registrados', icon: 'block' },
           ].map((m, i) => (
@@ -426,7 +426,7 @@ export default function Landing() {
               <Icon name="workspace_premium" filled />
             </div>
             <span className="text-headline-sm font-bold text-on-surface">Certificado de Auditoría</span>
-            <span className="font-code-md text-xs text-secondary">Stellar Soroban · v20.1 · Auditoría activa</span>
+            <span className="font-code-md text-xs text-secondary" title="Código auditable · Open Source · Auditoría independiente planificada">Stellar Soroban · v0.4.1-prototype (Testnet) · Código auditable (Open Source)</span>
             <div className="flex items-center gap-4 mt-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-tertiary/10 text-tertiary text-xs font-semibold">
                 <Icon name="check_circle" filled /> Auditado
@@ -435,7 +435,7 @@ export default function Landing() {
                 <Icon name="lock" filled /> Sin custodia
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface-variant text-xs font-semibold">
-                <Icon name="public" /> Mainnet
+                <Icon name="public" /> Prototype · Testnet
               </span>
             </div>
           </div>
@@ -550,16 +550,31 @@ export default function Landing() {
           ].map((col, i) => (
             <div key={i} className="flex flex-col gap-3">
               <span className="text-xs font-bold text-on-surface uppercase tracking-wider">{col.title}</span>
-              {col.links.map((link, j) => (
-                <a key={j} href="#" className="text-xs text-secondary hover:text-primary transition-colors">{link}</a>
-              ))}
+              {col.links.map((link, j) => {
+                const hrefMap: Record<string,string> = {
+                  'Cómo funciona': '#como-funciona',
+                  'Calculadora': '#calculadora',
+                  'Seguridad': '#seguridad',
+                  'Testimonios': '#testimonios',
+                  'Términos de uso': 'https://github.com/FernandoMay/breadline-protocol',
+                  'Política de privacidad': 'https://github.com/FernandoMay/breadline-protocol',
+                  'Descargo de responsabilidad': 'https://github.com/FernandoMay/breadline-protocol',
+                  'Documentación': 'https://github.com/FernandoMay/breadline-protocol',
+                  'GitHub': 'https://github.com/FernandoMay/breadline-protocol',
+                  'Contrato inteligente': 'https://stellar.expert/explorer/testnet/contract/CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5',
+                  'API': 'https://github.com/FernandoMay/breadline-protocol',
+                };
+                const href = hrefMap[link] || 'https://github.com/FernandoMay/breadline-protocol';
+                const isExternal = href.startsWith('http');
+                return <a key={j} href={href} target={isExternal ? '_blank' : undefined} rel={isExternal ? 'noopener' : undefined} className="text-xs text-secondary hover:text-primary transition-colors">{link}</a>;
+              })}
             </div>
           ))}
         </div>
 
         <div className="max-w-7xl mx-auto mt-10 pt-6 border-t border-outline-variant/20 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-secondary">
           <span>© 2026 Breadline Protocol. Todos los derechos reservados.</span>
-          <span className="font-code-md">Stellar Network · Soroban Smart Contracts v20.1</span>
+          <span className="font-code-md">Prototype · Stellar Testnet · Soroban · v0.4.1-prototype (Testnet)</span>
         </div>
       </footer>
 

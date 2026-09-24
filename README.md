@@ -13,6 +13,20 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 | **Smart Contract** | [StellarExpert — CATDRV...MT7G](https://stellar.expert/explorer/testnet/contract/CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5) |
 | **GitHub** | [github.com/FernandoMay/breadline-protocol](https://github.com/FernandoMay/breadline-protocol) |
 
+## Protocol Proof — Verificable on-chain (Stellar Testnet)
+
+| Field | Value |
+|-------|-------|
+| **Network** | Stellar Testnet |
+| **Contract** | `CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5` |
+| **Asset** | USDC (Testnet) |
+| **Explorer** | [stellar.expert — Testnet contract](https://stellar.expert/explorer/testnet/contract/CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5) |
+| **GitHub** | [github.com/FernandoMay/breadline-protocol](https://github.com/FernandoMay/breadline-protocol) |
+| **Version** | `v0.4.1-prototype (Testnet)` — Prototype \u00b7 Stellar Testnet \u00b7 Soroban (no mainnet) |
+| **Status** | Implementado: Stellar/Soroban + USDC escrow + Testnet settlement \u00b7 Prototype: payment link/wallet/disputas \u00b7 Planned: SEP-24/SPEI/PIX/CBU (partner integration) |
+
+> Demo escrow ESC-9482 (2,500 USDC) es **Transacción demo — fondos no reales · Testnet**.
+
 ## Smart Contract
 
 **Contract ID (Testnet):**
@@ -156,7 +170,7 @@ Every transaction is verifiable on StellarTestnet:
 
 ### Security Model
 
-- **Non-custodial:** Breadline never holds funds — the Soroban contract does
+- **Programmable escrow (smart-contract, non-custodial):** Breadline never holds funds — the Soroban contract does. This is NOT regulated custody, 100% insured vault, or fideicomiso bancario.
 - **Immutable:** Once deposited, funds cannot be moved without proper authorization
 - **Multi-party:** Buyer and seller both have explicit roles and authorization gates
 - **Dispute resolution:** Either party can trigger arbitration
@@ -165,11 +179,13 @@ Every transaction is verifiable on StellarTestnet:
 
 This project is submitted to the [Argentina Builder Challenge](https://www.baf.uy/) on the Stellar track.
 
-**Key metrics (projections):**
-- Target volume: $18.4M+ custodied in contracts
-- Settlement time: < 3.5 seconds (measured on Stellar Testnet)
-- Network fee: ~$0.00001 per transaction
-- Chargebacks: 0 (cryptographic finality)
+**Key metrics (simulated projections — Testnet prototype):**
+- Target volume: $18.4M+ Volumen objetivo (simulado)* — proyección simulada, no representa fondos custodiados reales
+- Settlement time: < 3.5 seconds median testnet settlement (Soroban)* — no incluye rampa bancaria
+- Network fee: ~$0.00001 per transaction (Stellar Testnet)
+- Chargebacks: 0 (cryptographic finality on Testnet demo)
+
+> * Ejemplo ilustrativo · Los costos reales varían por banco/corredor. Fuente placeholder: estimación interna. Todos los escrows demo son transacciones no reales en Testnet.
 
 ## License
 
@@ -177,5 +193,6 @@ MIT
 
 ## Contact
 
-- **Fernando May** — [fmayf130@gmail.com](mailto:fmayf130@gmail.com)
+- **Contact** — [contact@breadline.lat](mailto:contact@breadline.lat) · [fmayf130@gmail.com](mailto:fmayf130@gmail.com) (Contacto directo fundador) — Respuesta en <24h \u00b7 tambi\u00e9n v\u00eda [GitHub Discussions](https://github.com/FernandoMay/breadline-protocol/discussions)
+- **Fernando May** — [@FernandoMay](https://github.com/FernandoMay)
 - **GitHub:** [@FernandoMay](https://github.com/FernandoMay)
