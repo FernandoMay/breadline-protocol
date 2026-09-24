@@ -10,6 +10,7 @@ export type OnChainEscrowState = 'Created' | 'Funded' | 'Released' | 'Refunded' 
 export interface OnChainEscrow {
   buyer: string;
   seller: string;
+  token: string;
   amount: bigint;
   state: OnChainEscrowState;
   created_at: bigint;
@@ -37,6 +38,7 @@ function parseEscrowResult(retval: StellarSdk.xdr.ScVal): OnChainEscrow {
   return {
     buyer: String(native.buyer ?? ''),
     seller: String(native.seller ?? ''),
+    token: String(native.token ?? ''),
     amount: BigInt(String(native.amount ?? '0')),
     state: stateMap[rawStateKey] ?? 'Created',
     created_at: BigInt(String(native.created_at ?? '0')),
@@ -141,6 +143,15 @@ async function signAndSubmit(
   return { success: true, hash: result.hash };
 }
 
+// ─── USDC Testnet token placeholder ───
+// Replace with real USDC issuer on testnet when available.
+// CBIEL... is the SAC address for USDC on Stellar Testnet as documented in
+// Stellar Docs / Circle. If no USDC SAC exists in your environment, this
+// address serves as placeholder — deploy will fail until a real token SAC is
+// deployed and funded. Documented as placeholder; swap for production token.
+export const USDC_TOKEN_ADDRESS =
+  'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ';
+
 // ─── Contract actions ───
 
 export async function createEscrowOnChain(
@@ -149,13 +160,15 @@ export async function createEscrowOnChain(
   amountUsdc: number,
   deadlineTimestamp: number,
   description: string,
-  signTransaction: (xdr: string) => Promise<string | null>
+  signTransaction: (xdr: string) => Promise<string | null>,
+  tokenAddress: string = USDC_TOKEN_ADDRESS,
 ) {
   const amountStroops = BigInt(Math.round(amountUsdc * 10_000_000));
   const tx = await buildInvokeTx(
     'create_escrow',
     StellarSdk.nativeToScVal(buyerAddress, { type: 'address' }),
     StellarSdk.nativeToScVal(sellerAddress, { type: 'address' }),
+    StellarSdk.nativeToScVal(tokenAddress, { type: 'address' }),
     StellarSdk.nativeToScVal(amountStroops, { type: 'i128' }),
     StellarSdk.nativeToScVal(BigInt(deadlineTimestamp), { type: 'u64' }),
     StellarSdk.nativeToScVal(description, { type: 'string' }),

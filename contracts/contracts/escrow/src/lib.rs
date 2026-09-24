@@ -1,5 +1,8 @@
 #![no_std]
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Symbol};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, MuxedAddress,
+    String, Symbol,
+};
 
 const ESCROW_KEY: Symbol = symbol_short!("ESCROW");
 const INITIALIZED: Symbol = symbol_short!("INIT");
@@ -30,11 +33,12 @@ pub enum EscrowState {
 pub struct Escrow {
     pub buyer: Address,
     pub seller: Address,
+    pub token: Address,
     pub amount: i128,
     pub state: EscrowState,
     pub created_at: u64,
     pub deadline: u64,
-    pub service_description: Symbol,
+    pub service_description: String,
 }
 
 #[contract]
@@ -43,13 +47,15 @@ pub struct BreadlineEscrow;
 #[contractimpl]
 impl BreadlineEscrow {
     /// Create a new escrow agreement
+    /// MVP: one escrow per contract instance. Factory/multi-escrow is roadmap.
     pub fn create_escrow(
         env: Env,
         buyer: Address,
         seller: Address,
+        token: Address,
         amount: i128,
         deadline: u64,
-        service_description: Symbol,
+        service_description: String,
     ) -> Result<Escrow, EscrowError> {
         buyer.require_auth();
 
@@ -64,6 +70,7 @@ impl BreadlineEscrow {
         let escrow = Escrow {
             buyer: buyer.clone(),
             seller: seller.clone(),
+            token: token.clone(),
             amount,
             state: EscrowState::Created,
             created_at: env.ledger().timestamp(),
@@ -85,7 +92,7 @@ impl BreadlineEscrow {
             .ok_or(EscrowError::NotInitialized)
     }
 
-    /// Fund the escrow (buyer deposits)
+    /// Fund the escrow (buyer deposits) — transfers USDC from buyer to contract
     pub fn fund_escrow(env: Env) -> Result<Escrow, EscrowError> {
         let mut escrow: Escrow = env
             .storage()
@@ -99,13 +106,19 @@ impl BreadlineEscrow {
             return Err(EscrowError::InvalidState);
         }
 
+        // Real token custody: transfer from buyer to this contract
+        let token_client = soroban_sdk::token::TokenClient::new(&env, &escrow.token);
+        let contract_address = env.current_contract_address();
+        let contract_muxed = MuxedAddress::from(&contract_address);
+        token_client.transfer(&escrow.buyer, &contract_muxed, &escrow.amount);
+
         escrow.state = EscrowState::Funded;
         env.storage().instance().set(&ESCROW_KEY, &escrow);
 
         Ok(escrow)
     }
 
-    /// Release funds to seller (buyer approves delivery)
+    /// Release funds to seller (buyer approves delivery) — transfers USDC to seller
     pub fn release_funds(env: Env) -> Result<Escrow, EscrowError> {
         let mut escrow: Escrow = env
             .storage()
@@ -119,13 +132,18 @@ impl BreadlineEscrow {
             return Err(EscrowError::InvalidState);
         }
 
+        let token_client = soroban_sdk::token::TokenClient::new(&env, &escrow.token);
+        let contract_address = env.current_contract_address();
+        let seller_muxed = MuxedAddress::from(&escrow.seller);
+        token_client.transfer(&contract_address, &seller_muxed, &escrow.amount);
+
         escrow.state = EscrowState::Released;
         env.storage().instance().set(&ESCROW_KEY, &escrow);
 
         Ok(escrow)
     }
 
-    /// Refund buyer (seller authorizes the refund)
+    /// Refund buyer (seller or buyer authorizes the refund) — transfers USDC back to buyer
     pub fn refund_buyer(env: Env, caller: Address) -> Result<Escrow, EscrowError> {
         caller.require_auth();
 
@@ -142,6 +160,11 @@ impl BreadlineEscrow {
         if !matches!(escrow.state, EscrowState::Funded) {
             return Err(EscrowError::InvalidState);
         }
+
+        let token_client = soroban_sdk::token::TokenClient::new(&env, &escrow.token);
+        let contract_address = env.current_contract_address();
+        let buyer_muxed = MuxedAddress::from(&escrow.buyer);
+        token_client.transfer(&contract_address, &buyer_muxed, &escrow.amount);
 
         escrow.state = EscrowState::Refunded;
         env.storage().instance().set(&ESCROW_KEY, &escrow);
@@ -200,6 +223,11 @@ impl BreadlineEscrow {
         if env.ledger().timestamp() < escrow.deadline {
             return Err(EscrowError::DeadlineNotPassed);
         }
+
+        let token_client = soroban_sdk::token::TokenClient::new(&env, &escrow.token);
+        let contract_address = env.current_contract_address();
+        let buyer_muxed = MuxedAddress::from(&escrow.buyer);
+        token_client.transfer(&contract_address, &buyer_muxed, &escrow.amount);
 
         escrow.state = EscrowState::Refunded;
         env.storage().instance().set(&ESCROW_KEY, &escrow);

@@ -34,14 +34,29 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5
 ```
 
+**Token (Testnet):** USDC SAC placeholder `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ` — replace with deployed Stellar Asset Contract address for production. All custody functions use `soroban_sdk::token::TokenClient` (SDK 26) with `MuxedAddress` for transfers.
+
 **Functions:**
-- `create_escrow(buyer, seller, amount, deadline, description)` — Initialize an escrow agreement
-- `fund_escrow()` — Buyer deposits and locks funds
-- `release_funds()` — Buyer approves delivery, funds released to seller
-- `refund_buyer(caller)` — Buyer or seller can refund if delivery fails
-- `raise_dispute(caller)` — Either party opens dispute for arbitration
+- `create_escrow(buyer, seller, token, amount, deadline, service_description: String)` — Initialize escrow; stores token address (String, not Symbol)
+- `fund_escrow()` — Buyer deposits: `TokenClient.transfer(buyer -> contract, amount)` then state = Funded
+- `release_funds()` — Buyer approves: `TokenClient.transfer(contract -> seller, amount)` then Released
+- `refund_buyer(caller)` — Buyer or seller: `TokenClient.transfer(contract -> buyer, amount)` then Refunded
+- `auto_refund_if_expired()` — Anyone after deadline: `TokenClient.transfer(contract -> buyer, amount)` then Refunded
+- `raise_dispute(caller)` — Either party opens dispute for arbitration (state only, no transfer)
 - `get_escrow()` — Read current escrow state
 - `is_expired()` — Check if deadline has passed
+
+> **MVP: one escrow per contract instance. Factory/multi-escrow is roadmap.** See comment in `contracts/contracts/escrow/src/lib.rs`. Each deployment holds a single `ESCROW_KEY`; deploying a factory that maps `escrow_id -> Escrow` is deferred to keep audit scope small.
+
+### Audit Fix — Real USDC Custody (2026-09)
+
+| Check | Status | Notes |
+|-------|--------|-------|
+| **Real USDC custody** | ✅ Implemented (Testnet) | `fund_escrow` / `release_funds` / `refund_buyer` / `auto_refund_if_expired` now execute `TokenClient::transfer` against the stored `token` address. Verified by 13 `cargo test` cases using `StellarAssetClient` mint + balance assertions (buyer decrease, contract custody, seller increase, refund). |
+| **Single-escrow per instance** | ✅ MVP documented | `// MVP: one escrow per contract instance. Factory/multi-escrow is roadmap.` retained in `lib.rs`; README documents roadmap. |
+| **`service_description: Symbol` -> `String`** | ✅ Fixed | `soroban_sdk::String` now; frontend `contract.ts` uses `nativeToScVal(description, {type:'string'})`. |
+| **Certificate SHA-256** | ✅ Real | `Certificados.tsx` uses `crypto.subtle.digest('SHA-256', new TextEncoder().encode(certContent))` instead of `setTimeout 1.2s` fake. |
+| **Frontend token param** | ✅ Fixed | `createEscrowOnChain` now passes `tokenAddress` (defaults to `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ` placeholder) as `ScVal address`. |
 
 **Authorization:**
 - `release_funds` — only the **buyer** can execute

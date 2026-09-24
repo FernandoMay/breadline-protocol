@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { COUNTRIES, calculateFee, calculateNet, formatUSDC, ESCROW_CONTRACT_ID } from '../lib/stellar';
-import { createEscrowOnChain } from '../lib/contract';
+import { createEscrowOnChain, USDC_TOKEN_ADDRESS } from '../lib/contract';
 import { useStellarWallet } from '../hooks/useStellarWallet';
 import Toast from '../components/Toast';
 
@@ -60,6 +60,7 @@ export default function CrearEscrow() {
         Math.floor(Date.now() / 1000) + parseInt(form.deliveryDays) * 86400,
         form.serviceTitle,
         wallet.signTransaction,
+        USDC_TOKEN_ADDRESS,
       );
 
       if (result.success && result.hash) {
