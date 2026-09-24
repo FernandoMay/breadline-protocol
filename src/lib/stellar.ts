@@ -8,8 +8,9 @@ export const sorobanServer = new StellarSdk.rpc.Server(SOROBAN_RPC_URL);
 
 export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
 
-// Deployed escrow contract on Testnet
-export const ESCROW_CONTRACT_ID = import.meta.env.VITE_ESCROW_CONTRACT_ID || 'CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5';
+// Deployed escrow contract on Testnet — breadline-v3 (real USDC custody, token+String)
+export const ESCROW_CONTRACT_ID =
+  import.meta.env.VITE_ESCROW_CONTRACT_ID || 'CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM';
 
 export const CURRENCIES = ['USDC', 'USD'] as const;
 
@@ -101,13 +102,18 @@ export function getStatusColor(status: string): string {
 /**
  * Build an XDR transaction to create an escrow on-chain.
  * The wallet signs and submits this transaction.
+ * Uses real USDC token address (defaults to Testnet SAC placeholder).
  */
+export const USDC_TOKEN_ADDRESS_STELLAR =
+  'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ';
+
 export function buildCreateEscrowTx(
   buyerAddress: string,
   sellerAddress: string,
   amountStroops: number, // amount in stroops (1 USDC = 10,000,000 stroops)
   deadlineTimestamp: number,
   description: string,
+  tokenAddress: string = USDC_TOKEN_ADDRESS_STELLAR,
 ): StellarSdk.Transaction {
   const contract = new StellarSdk.Contract(ESCROW_CONTRACT_ID);
   const source = new StellarSdk.Account(buyerAddress, '0');
@@ -121,6 +127,7 @@ export function buildCreateEscrowTx(
         'create_escrow',
         StellarSdk.nativeToScVal(buyerAddress, { type: 'address' }),
         StellarSdk.nativeToScVal(sellerAddress, { type: 'address' }),
+        StellarSdk.nativeToScVal(tokenAddress, { type: 'address' }),
         StellarSdk.nativeToScVal(BigInt(amountStroops), { type: 'i128' }),
         StellarSdk.nativeToScVal(BigInt(deadlineTimestamp), { type: 'u64' }),
         StellarSdk.nativeToScVal(description, { type: 'string' }),

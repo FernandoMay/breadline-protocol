@@ -10,7 +10,7 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 |-----------|-----|
 | **Landing Page** | [breadlineprotocol.netlify.app](https://breadlineprotocol.netlify.app/) |
 | **App (Dashboard)** | [breadlineprotocol.netlify.app/app](https://breadlineprotocol.netlify.app/app/dashboard) |
-| **Smart Contract** | [StellarExpert — CATDRV...MT7G](https://stellar.expert/explorer/testnet/contract/CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5) |
+| **Smart Contract** | [StellarExpert — CCFNKL...YBIGM (v3)](https://stellar.expert/explorer/testnet/contract/CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM) |
 | **GitHub** | [github.com/FernandoMay/breadline-protocol](https://github.com/FernandoMay/breadline-protocol) |
 
 ## Protocol Proof — Verificable on-chain (Stellar Testnet)
@@ -18,12 +18,12 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 | Field | Value |
 |-------|-------|
 | **Network** | Stellar Testnet |
-| **Contract** | `CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5` |
-| **Asset** | USDC (Testnet) |
-| **Explorer** | [stellar.expert — Testnet contract](https://stellar.expert/explorer/testnet/contract/CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5) |
+| **Contract** | `CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM` (breadline-v3 — real USDC custody) · prev `CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5` deprecated |
+| **Asset** | USDC (Testnet) — Token SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ` |
+| **Explorer** | [stellar.expert — Testnet contract v3](https://stellar.expert/explorer/testnet/contract/CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM) · [Deploy Tx v3](https://stellar.expert/explorer/testnet/tx/f1dcb55844b59706ca4626c7a9922ef76cd1ad34a512bd5e8b29fc5ba52d86ad) · [WASM Tx](https://stellar.expert/explorer/testnet/tx/72392a45d2b50883dd2885c5da861ec84f366298549bfc3b2d83d8f2f6ed035f) |
 | **GitHub** | [github.com/FernandoMay/breadline-protocol](https://github.com/FernandoMay/breadline-protocol) |
-| **Version** | `v0.4.1-prototype (Testnet)` — Prototype \u00b7 Stellar Testnet \u00b7 Soroban (no mainnet) |
-| **Status** | Implementado: Stellar/Soroban + USDC escrow + Testnet settlement \u00b7 Prototype: payment link/wallet/disputas \u00b7 Planned: SEP-24/SPEI/PIX/CBU (partner integration) |
+| **Version** | `v0.5.0-breadline-v3 (Testnet)` — Real USDC custody · Stellar Testnet · Soroban (no mainnet) |
+| **Status** | Implementado: Stellar/Soroban + USDC escrow + Testnet settlement + TokenClient/MuxedAddress custody \u00b7 Prototype: payment link/wallet/disputas \u00b7 Planned: SEP-24/SPEI/PIX/CBU (partner integration) |
 
 > Demo escrow ESC-9482 (2,500 USDC) es **Transacción demo — fondos no reales · Testnet**.
 
@@ -31,10 +31,14 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 
 **Contract ID (Testnet):**
 ```
-CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5
+CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM  (breadline-v3, alias breadline-v3)
+Prev: CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5  (deprecated, state-only)
+Interim (old WASM, deprecated): CD4KEZOSCS6KQCPT4XJPRV4P37PPBXAM7LYM2ALZP2KURG5SFS4MHPVI
 ```
 
-**Token (Testnet):** USDC SAC placeholder `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ` — replace with deployed Stellar Asset Contract address for production. All custody functions use `soroban_sdk::token::TokenClient` (SDK 26) with `MuxedAddress` for transfers.
+**WASM:** `contracts/target/wasm32v1-none/release/escrow.wasm` (19,130 bytes, protocol 26, SDK 26.1.1) — built via WSL `cargo build --target wasm32v1-none --release`; Windows SAC blocks native `build-script-build` so WSL is required for fresh builds. Verify with `stellar contract inspect --wasm <path>`.
+
+**Token (Testnet):** USDC SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ` — documented placeholder from Stellar Docs/Circle; all custody functions use `soroban_sdk::token::TokenClient` (SDK 26) with `MuxedAddress` for transfers. Frontend `contract.ts` `USDC_TOKEN_ADDRESS` and `stellar.ts` `USDC_TOKEN_ADDRESS_STELLAR` both default to this address; `createEscrow` now requires `token: Address`.
 
 **Functions:**
 - `create_escrow(buyer, seller, token, amount, deadline, service_description: String)` — Initialize escrow; stores token address (String, not Symbol)
@@ -95,7 +99,8 @@ The app will be available at `http://localhost:5173/app/dashboard`.
 Create a `.env` file with:
 
 ```
-VITE_ESCROW_CONTRACT_ID=CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5
+VITE_ESCROW_CONTRACT_ID=CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM
+# Token (optional, defaults to CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ)
 ```
 
 ### Build & Deploy
