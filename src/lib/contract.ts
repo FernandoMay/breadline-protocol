@@ -150,7 +150,7 @@ async function signAndSubmit(
 // address serves as placeholder — deploy will fail until a real token SAC is
 // deployed and funded. Documented as placeholder; swap for production token.
 export const USDC_TOKEN_ADDRESS =
-  'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ';
+  'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA';
 
 // ─── Contract actions ───
 

@@ -19,7 +19,7 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 |-------|-------|
 | **Network** | Stellar Testnet |
 | **Contract** | `CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM` (breadline-v3 — real USDC custody) · prev `CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5` deprecated |
-| **Asset** | USDC (Testnet) — Token SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ` |
+| **Asset** | USDC (Testnet) — Token SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
 | **Explorer** | [stellar.expert — Testnet contract v3](https://stellar.expert/explorer/testnet/contract/CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM) · [Deploy Tx v3](https://stellar.expert/explorer/testnet/tx/f1dcb55844b59706ca4626c7a9922ef76cd1ad34a512bd5e8b29fc5ba52d86ad) · [WASM Tx](https://stellar.expert/explorer/testnet/tx/72392a45d2b50883dd2885c5da861ec84f366298549bfc3b2d83d8f2f6ed035f) |
 | **GitHub** | [github.com/FernandoMay/breadline-protocol](https://github.com/FernandoMay/breadline-protocol) |
 | **Version** | `v0.5.0-breadline-v3 (Testnet)` — Real USDC custody · Stellar Testnet · Soroban (no mainnet) |
@@ -38,7 +38,7 @@ Interim (old WASM, deprecated): CD4KEZOSCS6KQCPT4XJPRV4P37PPBXAM7LYM2ALZP2KURG5S
 
 **WASM:** `contracts/target/wasm32v1-none/release/escrow.wasm` (19,130 bytes, protocol 26, SDK 26.1.1) — built via WSL `cargo build --target wasm32v1-none --release`; Windows SAC blocks native `build-script-build` so WSL is required for fresh builds. Verify with `stellar contract inspect --wasm <path>`.
 
-**Token (Testnet):** USDC SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ` — documented placeholder from Stellar Docs/Circle; all custody functions use `soroban_sdk::token::TokenClient` (SDK 26) with `MuxedAddress` for transfers. Frontend `contract.ts` `USDC_TOKEN_ADDRESS` and `stellar.ts` `USDC_TOKEN_ADDRESS_STELLAR` both default to this address; `createEscrow` now requires `token: Address`.
+**Token (Testnet):** USDC SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` — documented placeholder from Stellar Docs/Circle; all custody functions use `soroban_sdk::token::TokenClient` (SDK 26) with `MuxedAddress` for transfers. Frontend `contract.ts` `USDC_TOKEN_ADDRESS` and `stellar.ts` `USDC_TOKEN_ADDRESS_STELLAR` both default to this address; `createEscrow` now requires `token: Address`.
 
 **Functions:**
 - `create_escrow(buyer, seller, token, amount, deadline, service_description: String)` — Initialize escrow; stores token address (String, not Symbol)
@@ -60,7 +60,7 @@ Interim (old WASM, deprecated): CD4KEZOSCS6KQCPT4XJPRV4P37PPBXAM7LYM2ALZP2KURG5S
 | **Single-escrow per instance** | ✅ MVP documented | `// MVP: one escrow per contract instance. Factory/multi-escrow is roadmap.` retained in `lib.rs`; README documents roadmap. |
 | **`service_description: Symbol` -> `String`** | ✅ Fixed | `soroban_sdk::String` now; frontend `contract.ts` uses `nativeToScVal(description, {type:'string'})`. |
 | **Certificate SHA-256** | ✅ Real | `Certificados.tsx` uses `crypto.subtle.digest('SHA-256', new TextEncoder().encode(certContent))` instead of `setTimeout 1.2s` fake. |
-| **Frontend token param** | ✅ Fixed | `createEscrowOnChain` now passes `tokenAddress` (defaults to `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ` placeholder) as `ScVal address`. |
+| **Frontend token param** | ✅ Fixed | `createEscrowOnChain` now passes `tokenAddress` (defaults to `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` placeholder) as `ScVal address`. |
 
 **Authorization:**
 - `release_funds` — only the **buyer** can execute
@@ -100,7 +100,7 @@ Create a `.env` file with:
 
 ```
 VITE_ESCROW_CONTRACT_ID=CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM
-# Token (optional, defaults to CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ)
+# Token (optional, defaults to CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA)
 ```
 
 ### Build & Deploy

@@ -105,7 +105,7 @@ export function getStatusColor(status: string): string {
  * Uses real USDC token address (defaults to Testnet SAC placeholder).
  */
 export const USDC_TOKEN_ADDRESS_STELLAR =
-  'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIK7TWA2GCJ';
+  'CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA';
 
 export function buildCreateEscrowTx(
   buyerAddress: string,
