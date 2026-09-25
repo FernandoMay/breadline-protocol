@@ -262,6 +262,48 @@ export default function Header() {
           onFailed={(message) => setToast({ message, type: 'error' })}
         />
       )}
+      {wallet.diagnostics && !wallet.connected && (
+        <div className="border-t border-error/30 bg-error/5">
+          <div className="w-full max-w-[1440px] mx-auto px-4 md:px-8 py-3 flex flex-col gap-2">
+            <p className="text-label-md text-label-md text-error font-semibold">
+              Diagnóstico de conexión a la wallet
+            </p>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-label-sm text-label-sm text-on-surface-variant">
+              <div className="flex gap-1.5">
+                <dt className="text-secondary">Globals de Freighter:</dt>
+                <dd className="font-code-md text-on-surface">
+                  {wallet.diagnostics.globalsFound.length > 0
+                    ? wallet.diagnostics.globalsFound.join(', ')
+                    : 'ninguna'}
+                </dd>
+              </div>
+              <div className="flex gap-1.5">
+                <dt className="text-secondary">Evento freighter:ready:</dt>
+                <dd className="font-code-md text-on-surface">
+                  {wallet.diagnostics.readyEventSeen ? 'sí' : 'no'}
+                </dd>
+              </div>
+              <div className="flex gap-1.5">
+                <dt className="text-secondary">Contexto seguro (https):</dt>
+                <dd className="font-code-md text-on-surface">
+                  {wallet.diagnostics.secureContext ? 'sí' : 'NO'}
+                </dd>
+              </div>
+              <div className="flex gap-1.5">
+                <dt className="text-secondary">Otras wallets detectadas:</dt>
+                <dd className="font-code-md text-on-surface">
+                  {wallet.diagnostics.otherWallets.length > 0
+                    ? wallet.diagnostics.otherWallets.join(', ')
+                    : 'ninguna'}
+                </dd>
+              </div>
+            </dl>
+            <p className="text-label-sm text-label-sm text-secondary break-all">
+              {wallet.diagnostics.userAgent}
+            </p>
+          </div>
+        </div>
+      )}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </header>
   );

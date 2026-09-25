@@ -76,23 +76,25 @@ function getFreighter(): FreighterApi | null {
  * Returns null only after the full budget elapses, so a slow injection is no
  * longer misreported as a missing extension.
  */
-function waitForFreighter(timeoutMs = 10000): Promise<FreighterApi | null> {
+function waitForFreighter(timeoutMs = 10000): Promise<{ api: FreighterApi | null; readyEventSeen: boolean }> {
   const immediate = getFreighter();
-  if (immediate) return Promise.resolve(immediate);
-  if (typeof window === 'undefined') return Promise.resolve(null);
+  if (immediate) return Promise.resolve({ api: immediate, readyEventSeen: false });
+  if (typeof window === 'undefined') return Promise.resolve({ api: null, readyEventSeen: false });
 
   return new Promise((resolve) => {
     let settled = false;
+    let readyEventSeen = false;
     const finish = (api: FreighterApi | null) => {
       if (settled) return;
       settled = true;
       window.removeEventListener(FREIGHTER_READY_EVENT, onReady);
       window.clearInterval(poll);
       clearTimeout(timer);
-      resolve(api);
+      resolve({ api, readyEventSeen });
     };
 
     function onReady() {
+      readyEventSeen = true;
       finish(getFreighter());
     }
 
@@ -109,6 +111,46 @@ function waitForFreighter(timeoutMs = 10000): Promise<FreighterApi | null> {
 
 const ERROR_NOT_INSTALLED =
   'No se encontró Freighter tras 10 segundos. Verificá que la extensión esté instalada y habilitada en este navegador, y que no esté bloqueada por un bloqueador de anuncios o Shields.';
+
+/**
+ * What the page can actually observe about the browser and the extension.
+ * Surfaced in the UI so a failed connection reports facts instead of guesses.
+ */
+interface WalletDiagnostics {
+  userAgent: string;
+  /** True when the page is served over a secure context (extensions require it). */
+  secureContext: boolean;
+  isLocalhost: boolean;
+  /** Which known wallet globals are present, and whether they look usable. */
+  globalsFound: string[];
+  /** Wallets of other ecosystems, useful to tell "no extension" from "wrong wallet". */
+  otherWallets: string[];
+  /** True when the page fired `freighter:ready` during the detection window. */
+  readyEventSeen: boolean;
+  /** Non-fatal detection problems, e.g. the page was open before the extension loaded. */
+  notes: string[];
+}
+
+function collectDiagnostics(readyEventSeen: boolean, notes: string[]): WalletDiagnostics {
+  const w = typeof window === 'undefined' ? ({} as Record<string, unknown>) : (window as unknown as Record<string, unknown>);
+  const globalsFound = FREIGHTER_GLOBALS.filter((name) => typeof w[name] !== 'undefined');
+  const otherWallets: string[] = [];
+  if (typeof w.ethereum !== 'undefined') otherWallets.push('EIP-1193 (ethereum/metamask)');
+  if (typeof w.solana !== 'undefined') otherWallets.push('solana');
+  if (typeof w.phantom !== 'undefined' || typeof w.solflare !== 'undefined') otherWallets.push('phantom/solflare');
+  if (typeof w.trust !== 'undefined' || typeof w.trustWallet !== 'undefined') otherWallets.push('trust');
+
+  return {
+    userAgent: typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent,
+    secureContext: typeof window !== 'undefined' && window.isSecureContext === true,
+    isLocalhost:
+      typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(window.location.hostname),
+    globalsFound,
+    otherWallets,
+    readyEventSeen,
+    notes,
+  };
+}
 const ERROR_LOCKED =
   'Freighter bloqueado o el sitio no fue aprobado. Desbloqueá la extensión y aprobá la conexión.';
 const ERROR_REJECTED = 'Rechazaste la conexión en Freighter.';
@@ -231,6 +273,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [fundingError, setFundingError] = useState('');
   // Last known non-testnet selection, so signTransaction can fail fast.
   const networkMismatchRef = useRef('');
+  /** Observable facts about the browser, filled in whenever detection runs. */
+  const [diagnostics, setDiagnostics] = useState<WalletDiagnostics | null>(null);
 
   /**
    * Read the account from Horizon and classify its funding situation.
@@ -318,13 +362,19 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     // Wait for the asynchronous injection instead of failing on a single early
     // miss, which is what made an installed extension look absent.
-    const freighter = await waitForFreighter();
+    const { api: freighter, readyEventSeen } = await waitForFreighter();
     if (!freighter) {
       setLoading(false);
+      setDiagnostics(
+        collectDiagnostics(readyEventSeen, [
+          'Ninguna variable global de Freighter apareció en la ventana.',
+        ]),
+      );
       setError(ERROR_NOT_INSTALLED);
       return { success: false, error: ERROR_NOT_INSTALLED };
     }
 
+    setDiagnostics(collectDiagnostics(readyEventSeen, []));
     setLoading(true);
     setError('');
 
@@ -419,8 +469,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
-    const freighter = await waitForFreighter();
+    const { api: freighter, readyEventSeen } = await waitForFreighter();
     if (!freighter) {
+      setDiagnostics(
+        collectDiagnostics(readyEventSeen, ['Firma: Freighter no apareció al momento de firmar.']),
+      );
       setError(ERROR_NOT_INSTALLED);
       return null;
     }
@@ -465,8 +518,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     void (async () => {
-      const freighter = await waitForFreighter();
-      if (cancelled || !freighter) return;
+      const { api: freighter, readyEventSeen } = await waitForFreighter();
+      if (!freighter) {
+        // Record what the page saw so the UI can explain a failed detection.
+        setDiagnostics(
+          collectDiagnostics(readyEventSeen, [
+            'Auto-conexión: Freighter no apareció dentro del presupuesto de espera.',
+          ]),
+        );
+        return;
+      }
+      setDiagnostics(collectDiagnostics(readyEventSeen, []));
+      if (cancelled) return;
 
       const result = await resolveAddress(freighter);
       if (cancelled || !result.ok) return;
@@ -501,6 +564,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       fundingLoading,
       fundingError,
       fundTestnetXlm,
+      diagnostics,
     }),
     [
       connected,
@@ -517,6 +581,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       fundingLoading,
       fundingError,
       fundTestnetXlm,
+      diagnostics,
     ]
   );
 
@@ -544,6 +609,8 @@ export interface StellarWalletValue {
   fundingError: string;
   /** Request testnet XLM from Friendbot for the connected account. */
   fundTestnetXlm: () => Promise<{ success: boolean; error?: string }>;
+  /** Observable browser/injection facts, shown when wallet detection fails. */
+  diagnostics: WalletDiagnostics | null;
 }
 
 const StellarWalletContext = createContext<StellarWalletValue | null>(null);
