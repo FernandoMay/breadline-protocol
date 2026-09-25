@@ -15,7 +15,16 @@ pub enum EscrowError {
     InvalidAmount = 3,
     InvalidState = 4,
     Unauthorized = 5,
+    /// The deadline has not been reached yet: the caller is too early.
     DeadlineNotPassed = 6,
+    /// Buyer and seller are the same account. An escrow needs two distinct
+    /// counterparties, otherwise it has no settlement meaning.
+    SameParties = 7,
+    /// The supplied deadline is not strictly in the future.
+    InvalidDeadline = 8,
+    /// The deadline has been reached: funding or release are no longer allowed.
+    /// Past the deadline the only settlement path is `auto_refund_if_expired`.
+    DeadlinePassed = 9,
 }
 
 #[contracttype]
@@ -48,6 +57,12 @@ pub struct BreadlineEscrow;
 impl BreadlineEscrow {
     /// Create a new escrow agreement
     /// MVP: one escrow per contract instance. Factory/multi-escrow is roadmap.
+    ///
+    /// Deliberate rules enforced here:
+    /// - `buyer` and `seller` must be distinct accounts (`SameParties`).
+    /// - `deadline` must be strictly in the future (`InvalidDeadline`).
+    ///   The deadline is the single settlement cutoff: before it, the buyer may
+    ///   release or refund; from it onward, only `auto_refund_if_expired` applies.
     pub fn create_escrow(
         env: Env,
         buyer: Address,
@@ -65,6 +80,14 @@ impl BreadlineEscrow {
 
         if amount <= 0 {
             return Err(EscrowError::InvalidAmount);
+        }
+
+        if buyer == seller {
+            return Err(EscrowError::SameParties);
+        }
+
+        if deadline <= env.ledger().timestamp() {
+            return Err(EscrowError::InvalidDeadline);
         }
 
         let escrow = Escrow {
@@ -93,6 +116,9 @@ impl BreadlineEscrow {
     }
 
     /// Fund the escrow (buyer deposits) — transfers USDC from buyer to contract
+    ///
+    /// Rejects funding once the deadline has been reached: accepting a deposit
+    /// that can no longer be released to the seller would be a trap for the buyer.
     pub fn fund_escrow(env: Env) -> Result<Escrow, EscrowError> {
         let mut escrow: Escrow = env
             .storage()
@@ -104,6 +130,10 @@ impl BreadlineEscrow {
 
         if !matches!(escrow.state, EscrowState::Created) {
             return Err(EscrowError::InvalidState);
+        }
+
+        if env.ledger().timestamp() >= escrow.deadline {
+            return Err(EscrowError::DeadlinePassed);
         }
 
         // Real token custody: transfer from buyer to this contract
@@ -119,6 +149,13 @@ impl BreadlineEscrow {
     }
 
     /// Release funds to seller (buyer approves delivery) — transfers USDC to seller
+    ///
+    /// Deadline rule (deliberate): a funded escrow can only be released to the
+    /// seller while the deadline has not been reached. From the deadline onward
+    /// `release_funds` is rejected with `DeadlinePassed` and the only remaining
+    /// settlement path is `auto_refund_if_expired`, which returns the funds to
+    /// the buyer. This keeps a single, permissionless settlement path after
+    /// expiry and guarantees the funds are never stranded.
     pub fn release_funds(env: Env) -> Result<Escrow, EscrowError> {
         let mut escrow: Escrow = env
             .storage()
@@ -130,6 +167,10 @@ impl BreadlineEscrow {
 
         if !matches!(escrow.state, EscrowState::Funded) {
             return Err(EscrowError::InvalidState);
+        }
+
+        if env.ledger().timestamp() >= escrow.deadline {
+            return Err(EscrowError::DeadlinePassed);
         }
 
         let token_client = soroban_sdk::token::TokenClient::new(&env, &escrow.token);
@@ -207,8 +248,17 @@ impl BreadlineEscrow {
         Ok(env.ledger().timestamp() >= escrow.deadline)
     }
 
-    /// Auto-refund if deadline has passed and escrow is still Funded.
+    /// Auto-refund if the deadline has passed and the escrow is still unsettled.
     /// No auth required — anyone can trigger this safety mechanism.
+    ///
+    /// Deliberate rule (P0 safety valve): a dispute FREEZES settlement, it does not
+    /// trap funds. `Funded` and `Disputed` are both accepted, so once the deadline
+    /// is reached a disputed escrow resolves to `Refunded` and the buyer recovers
+    /// the tokens. Permissionless, so the funds can never be locked forever.
+    ///
+    /// Dispute resolution BEFORE the deadline (arbitration: an arbitrator or a
+    /// multisig deciding who gets the funds) is NOT implemented and is roadmap.
+    /// Until it exists, `Disputed` escrows can only settle via this expiry refund.
     pub fn auto_refund_if_expired(env: Env) -> Result<Escrow, EscrowError> {
         let mut escrow: Escrow = env
             .storage()
@@ -216,7 +266,7 @@ impl BreadlineEscrow {
             .get(&ESCROW_KEY)
             .ok_or(EscrowError::NotInitialized)?;
 
-        if !matches!(escrow.state, EscrowState::Funded) {
+        if !matches!(escrow.state, EscrowState::Funded | EscrowState::Disputed) {
             return Err(EscrowError::InvalidState);
         }
 

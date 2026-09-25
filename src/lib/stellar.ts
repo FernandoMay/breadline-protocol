@@ -110,7 +110,7 @@ export const USDC_TOKEN_ADDRESS_STELLAR =
 export function buildCreateEscrowTx(
   buyerAddress: string,
   sellerAddress: string,
-  amountStroops: number, // amount in stroops (1 USDC = 10,000,000 stroops)
+  amountBaseUnits: number, // amount in token base units (1 USDC = 10,000,000 base units, not stroops)
   deadlineTimestamp: number,
   description: string,
   tokenAddress: string = USDC_TOKEN_ADDRESS_STELLAR,
@@ -128,7 +128,7 @@ export function buildCreateEscrowTx(
         StellarSdk.nativeToScVal(buyerAddress, { type: 'address' }),
         StellarSdk.nativeToScVal(sellerAddress, { type: 'address' }),
         StellarSdk.nativeToScVal(tokenAddress, { type: 'address' }),
-        StellarSdk.nativeToScVal(BigInt(amountStroops), { type: 'i128' }),
+        StellarSdk.nativeToScVal(BigInt(amountBaseUnits), { type: 'i128' }),
         StellarSdk.nativeToScVal(BigInt(deadlineTimestamp), { type: 'u64' }),
         StellarSdk.nativeToScVal(description, { type: 'string' }),
       ),
@@ -174,15 +174,16 @@ export function buildFundEscrowTx(
 }
 
 /**
- * Convert USDC amount to stroops (1 USDC = 10,000,000 stroops)
+ * Convert a USDC amount to token base units (1 USDC = 10,000,000 base units).
+ * Not stroops: a stroop is the 1e-7 XLM base unit.
  */
-export function usdcToStroops(usdc: number): number {
+export function usdcToBaseUnits(usdc: number): number {
   return Math.round(usdc * 10_000_000);
 }
 
 /**
- * Convert stroops to USDC
+ * Convert token base units back to USDC.
  */
-export function stroopsToUsdc(stroops: number): number {
-  return stroops / 10_000_000;
+export function baseUnitsToUsdc(baseUnits: number): number {
+  return baseUnits / 10_000_000;
 }

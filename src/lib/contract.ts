@@ -163,13 +163,13 @@ export async function createEscrowOnChain(
   signTransaction: (xdr: string) => Promise<string | null>,
   tokenAddress: string = USDC_TOKEN_ADDRESS,
 ) {
-  const amountStroops = BigInt(Math.round(amountUsdc * 10_000_000));
+  const amountBaseUnits = BigInt(Math.round(amountUsdc * USDC_BASE_UNITS));
   const tx = await buildInvokeTx(
     'create_escrow',
     StellarSdk.nativeToScVal(buyerAddress, { type: 'address' }),
     StellarSdk.nativeToScVal(sellerAddress, { type: 'address' }),
     StellarSdk.nativeToScVal(tokenAddress, { type: 'address' }),
-    StellarSdk.nativeToScVal(amountStroops, { type: 'i128' }),
+    StellarSdk.nativeToScVal(amountBaseUnits, { type: 'i128' }),
     StellarSdk.nativeToScVal(BigInt(deadlineTimestamp), { type: 'u64' }),
     StellarSdk.nativeToScVal(description, { type: 'string' }),
   );
@@ -219,20 +219,28 @@ export async function autoRefundIfExpiredOnChain(
   return signAndSubmit(tx, signTransaction);
 }
 
-// ─── USDC helpers ───
+// ─── USDC base units ───
 
-export function usdcToStroops(usdc: number): bigint {
-  return BigInt(Math.round(usdc * 10_000_000));
+/**
+ * Amounts on-chain are token BASE UNITS, not stroops (a stroop is the 1e-7 XLM
+ * base unit). This is the base-unit scale assumed for the USDC SAC above:
+ * 10,000,000 base units = 1 USDC. Confirm it against the deployed SAC's
+ * `decimals()` before any mainnet use.
+ */
+export const USDC_BASE_UNITS = 10_000_000;
+
+export function usdcToBaseUnits(usdc: number): bigint {
+  return BigInt(Math.round(usdc * USDC_BASE_UNITS));
 }
 
-export function stroopsToUsdc(stroops: bigint): number {
-  return Number(stroops) / 10_000_000;
+export function baseUnitsToUsdc(baseUnits: bigint): number {
+  return Number(baseUnits) / USDC_BASE_UNITS;
 }
 
-export function formatScAmount(stroops: bigint): string {
+export function formatScAmount(baseUnits: bigint): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 2,
-  }).format(stroopsToUsdc(stroops));
+  }).format(baseUnitsToUsdc(baseUnits));
 }

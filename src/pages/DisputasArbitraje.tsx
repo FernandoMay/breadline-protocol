@@ -82,7 +82,9 @@ export default function DisputasArbitraje() {
     try {
       const result = await raiseDisputeOnChain(wallet.address, wallet.signTransaction);
       if (result.success) {
-        setSuccessMsg('Dispute raised successfully. Awaiting jury resolution.');
+        setSuccessMsg(
+          'Dispute flag set on-chain. Settlement is frozen. On-chain resolution before the deadline is not implemented yet: at the deadline anyone can trigger the auto-refund to the buyer.'
+        );
         await loadEscrow();
       } else {
         setError(result.error ?? 'Failed to raise dispute');
@@ -224,7 +226,9 @@ export default function DisputasArbitraje() {
                 Escrow Funded — Ready for Dispute
               </h1>
               <p className="text-sm text-secondary">
-                Funds are locked on-chain. Either party may raise a dispute to trigger jury arbitration.
+                Funds are locked on-chain. Either party may raise a dispute, which freezes settlement.
+                There is no arbitrator on-chain yet: a disputed escrow can only be settled by the
+                auto-refund to the buyer once the deadline is reached.
               </p>
             </div>
           </div>
@@ -301,10 +305,13 @@ export default function DisputasArbitraje() {
               </span>
             </div>
             <h1 className="text-3xl md:text-4xl text-on-surface tracking-tight font-bold">
-              Dispute Open — Awaiting Resolution
+              Dispute Flag Raised — Settlement Frozen
             </h1>
             <p className="text-sm text-secondary">
-              This escrow is under dispute. The funds are locked until a resolution is executed on-chain.
+              This escrow is flagged as disputed on-chain. <strong className="text-on-surface">No arbitrator
+              or jury exists on-chain yet</strong>, so neither release nor refund can be executed while the
+              dispute stands. The funds are never stranded: at the deadline the contract can be settled by
+              <code className="font-code-md"> auto_refund_if_expired</code>, which returns the tokens to the buyer.
             </p>
           </div>
         </div>
@@ -393,30 +400,36 @@ export default function DisputasArbitraje() {
             </div>
             <h2 className="text-lg text-on-surface font-semibold">Resolution Actions</h2>
           </div>
+          <span className="px-2 py-0.5 rounded text-[10px] bg-surface-container-high text-secondary">Roadmap</span>
         </div>
 
+        <p className="text-sm text-secondary">
+          <code className="font-code-md">release_funds</code> and{' '}
+          <code className="font-code-md">refund_buyer</code> both require the escrow to be{' '}
+          <strong className="text-on-surface">Funded</strong>. While it is{' '}
+          <strong className="text-on-surface">Disputed</strong> the contract rejects them, so there is no
+          pre-deadline split or ruling to execute. The only available settlement is the permissionless
+          auto-refund to the buyer once the deadline is reached.
+        </p>
+
         {!wallet.connected ? (
-          <p className="text-sm text-secondary">Connect your Stellar wallet to resolve this dispute.</p>
+          <p className="text-sm text-secondary">Connect your Stellar wallet to interact with this escrow.</p>
         ) : (
           <div className="flex flex-col sm:flex-row gap-4">
             <button
               onClick={handleRefundBuyer}
-              disabled={actionLoading}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-on-primary text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-colors"
+              disabled
+              title="Unavailable: refund_buyer requires the Funded state"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-surface-container-high text-secondary text-sm font-semibold cursor-not-allowed"
             >
-              {actionLoading && (
-                <div className="w-4 h-4 border-2 border-on-primary border-t-transparent rounded-full animate-spin" />
-              )}
               Refund to Buyer
             </button>
             <button
               onClick={handleReleaseToSeller}
-              disabled={actionLoading}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-tertiary text-on-tertiary text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-colors"
+              disabled
+              title="Unavailable: release_funds requires the Funded state"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-surface-container-high text-secondary text-sm font-semibold cursor-not-allowed"
             >
-              {actionLoading && (
-                <div className="w-4 h-4 border-2 border-on-tertiary border-t-transparent rounded-full animate-spin" />
-              )}
               Release to Seller
             </button>
           </div>
@@ -441,8 +454,10 @@ export default function DisputasArbitraje() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
           </svg>
           <p className="text-xs text-on-surface leading-relaxed">
-            Once a resolution is executed on-chain, the transaction is final and cannot be reversed.
-            The Soroban smart contract distributes funds according to the chosen resolution path.
+            Settlement on Stellar Testnet is final and cannot be reversed. Honest scope of the current
+            contract: <code className="font-code-md">raise_dispute</code> only records the dispute flag and
+            blocks release/refund. It does not split funds between parties — there is no on-chain arbitrator,
+            jury or multi-sig signature set yet. Pre-deadline dispute resolution is roadmap.
           </p>
         </div>
       </section>

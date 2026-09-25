@@ -38,16 +38,6 @@ function IconPrinter({ className = "w-4 h-4" }: { className?: string }) {
   );
 }
 
-function IconDownload({ className = "w-4 h-4" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
-}
-
 function IconShield({ className = "w-4 h-4" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -168,9 +158,11 @@ const LABELS: Record<Lang, Record<string, string>> = {
   ES: {
     toolbarStatus: "VALIDADO",
     page: "Pagina",
-    verify: "Verificar SHA-256",
+    verify: "Calcular SHA-256",
     print: "Imprimir",
-    downloadPdf: "Descargar PDF",
+    downloadPdf: "Imprimir / Guardar como PDF",
+    hashNote:
+      "El boton calcula el digest SHA-256 de estos datos. Todavia no se compara contra un hash comprometido en la cadena: esa comparacion es roadmap.",
     institution: "Breadline -- Plataforma de Escrow Stellar",
     certificateTitle: "CERTIFICADO INSTITUCIONAL DE LIQUIDACION Y LAUDO ARBITRAL VINCULANTE",
     section1: "Resumen Ejecutivo",
@@ -195,9 +187,8 @@ const LABELS: Record<Lang, Record<string, string>> = {
     of: "de",
     folio: "Folio",
     ledgerSeq: "Contrato Soroban",
-    hashVerified: "Hash verificado correctamente",
-    hashVerifying: "Verificando hash...",
-    hashInvalid: "Hash no coincide — certificado invalido",
+    hashComputed: "SHA-256 calculado",
+    hashVerifying: "Calculando SHA-256...",
     toastClose: "Cerrar",
     created: "Creacion",
     deadline: "Fecha Limite",
@@ -206,9 +197,11 @@ const LABELS: Record<Lang, Record<string, string>> = {
   EN: {
     toolbarStatus: "VALIDATED",
     page: "Page",
-    verify: "Verify SHA-256",
+    verify: "Compute SHA-256",
     print: "Print",
-    downloadPdf: "Download PDF",
+    downloadPdf: "Print / Save as PDF",
+    hashNote:
+      "The button computes the SHA-256 digest of this data. It is not yet compared against a hash committed on-chain: that comparison is roadmap.",
     institution: "Breadline -- Stellar Escrow Platform",
     certificateTitle: "INSTITUTIONAL CERTIFICATE OF SETTLEMENT AND BINDING ARBITRAL AWARD",
     section1: "Executive Summary",
@@ -233,9 +226,8 @@ const LABELS: Record<Lang, Record<string, string>> = {
     of: "of",
     folio: "Folio",
     ledgerSeq: "Soroban Contract",
-    hashVerified: "Hash verified successfully",
-    hashVerifying: "Verifying hash...",
-    hashInvalid: "Hash mismatch — invalid certificate",
+    hashComputed: "SHA-256 computed",
+    hashVerifying: "Computing SHA-256...",
     toastClose: "Close",
     created: "Created",
     deadline: "Deadline",
@@ -281,14 +273,13 @@ export default function Certificados() {
   const zoomOut = useCallback(() => setZoom((z) => Math.max(z - 10, 60)), []);
   const handlePrint = useCallback(() => window.print(), []);
 
-  const handleDownloadPdf = useCallback(() => {
-    setToast(lang === "ES" ? "Preparando descarga..." : "Preparing download...");
-    setTimeout(() => setToast(null), 2000);
-  }, [lang]);
+  // The previous "Download PDF" button only showed a toast: it produced no file.
+  // Browser print is the real, dependency-free way to get a PDF out of this page.
+  const handleSaveAsPdf = useCallback(() => window.print(), []);
 
   const handleVerifyHash = useCallback(async () => {
     if (!escrow) {
-      setToast(lang === "ES" ? "No hay certificado para verificar" : "No certificate to verify");
+      setToast(lang === "ES" ? "No hay certificado para calcular" : "No certificate to hash");
       setTimeout(() => setToast(null), 2500);
       return;
     }
@@ -299,21 +290,13 @@ export default function Certificados() {
       const hashBuffer = await crypto.subtle.digest("SHA-256", data);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
       const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("").toUpperCase();
-      // The displayed hash reference is derived from ESCROW_CONTRACT_ID; we recompute and compare
-      // For real on-chain verification, compare hashHex to an on-chain stored certificate hash.
-      // Here we show valid/invalid by comparing recomputed hash to itself (always valid) but
-      // demonstrate real SHA-256 flow. If a stored hash existed, we would do:
-      // if (hashHex !== expectedHash) -> invalid
-      const shortHash = hashHex.slice(0, 16);
-      const isValid = hashHex.length === 64; // SHA-256 always 64 hex chars; real check would compare to stored value
-      if (isValid) {
-        setToast(`${t.hashVerified}: ${shortHash}...`);
-      } else {
-        setToast((t as Record<string, string>).hashInvalid || "Hash mismatch");
-      }
+      // This computes the digest and reports it. It is not a verification: nothing is
+      // compared against a hash committed on-chain yet, so no valid/invalid verdict
+      // is claimed. Storing a certificate hash on-chain and diffing against it is roadmap.
+      setToast(`${t.hashComputed}: ${hashHex.slice(0, 16)}...`);
       setTimeout(() => setToast(null), 4000);
     } catch {
-      setToast(lang === "ES" ? "Error al verificar hash" : "Hash verification error");
+      setToast(lang === "ES" ? "Error al calcular el hash" : "Hash computation error");
       setTimeout(() => setToast(null), 2500);
     }
   }, [t, escrow, lang]);
@@ -353,8 +336,9 @@ export default function Certificados() {
         <button onClick={handlePrint} className="p-1.5 rounded hover:bg-gray-100 text-gray-600 transition-colors" aria-label={t.print}>
           <IconPrinter />
         </button>
-        <button onClick={handleDownloadPdf} className="p-1.5 rounded hover:bg-gray-100 text-gray-600 transition-colors" aria-label={t.downloadPdf}>
-          <IconDownload />
+        <button onClick={handleSaveAsPdf} className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded border border-gray-300 hover:bg-gray-100 text-gray-700 transition-colors">
+          <IconPrinter className="w-3.5 h-3.5" />
+          {t.downloadPdf}
         </button>
       </div>
     </div>
@@ -418,7 +402,7 @@ export default function Certificados() {
   // -----------------------------------------------------------------------
   const documentContent = (
     <div
-      className="mx-auto bg-white shadow-2xl print:shadow-none"
+      className="print-doc mx-auto bg-white shadow-2xl print:shadow-none"
       style={{ maxWidth: 940, transform: `scale(${zoom / 100})`, transformOrigin: "top center", width: "100%" }}
     >
       <div className="px-12 py-10 text-gray-900" style={{ fontSize: 13, lineHeight: 1.7 }}>
@@ -533,6 +517,9 @@ export default function Certificados() {
             <span className="text-gray-500">{t.transactionHash}:</span>
             <p className="mt-0.5 font-mono text-[10px] break-all text-gray-800">{ESCROW_CONTRACT_ID}</p>
           </div>
+          <p className="text-[10px] leading-relaxed text-gray-500 border-l-2 border-amber-300 pl-2">
+            {t.hashNote}
+          </p>
           <div>
             <p className="mb-2 font-semibold text-[#1e3a5f]">{t.signers}:</p>
             <div className="grid grid-cols-2 gap-3">

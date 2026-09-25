@@ -99,3 +99,25 @@ body {
 * {
   scrollbar-width: none;
 }
+
+/* Certificate print rules. The document wrapper carries an inline
+   `transform: scale(zoom)` that only makes sense on screen, so it is neutralized
+   here. `!important` is required to beat the inline style. */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #ffffff;
+  }
+
+  .print-doc {
+    transform: none !important;
+    max-width: none !important;
+    width: 100% !important;
+    box-shadow: none !important;
+  }
+}

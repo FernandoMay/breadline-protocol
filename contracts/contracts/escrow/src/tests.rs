@@ -415,6 +415,184 @@ fn test_auto_refund_fails_before_deadline() {
 }
 
 #[test]
+fn test_create_escrow_rejects_same_parties() {
+    let env = Env::default();
+    let contract_id = env.register(BreadlineEscrow, ());
+    let buyer = Address::generate(&env);
+    let (token, _) = setup_token(&env);
+
+    env.mock_all_auths();
+
+    // Buyer and seller must be distinct counterparties.
+    let result = env.as_contract(&contract_id, || {
+        BreadlineEscrow::create_escrow(
+            env.clone(),
+            buyer.clone(),
+            buyer.clone(),
+            token.clone(),
+            1000,
+            1000000,
+            String::from_str(&env, "test"),
+        )
+    });
+
+    assert!(matches!(result.unwrap_err(), EscrowError::SameParties));
+}
+
+#[test]
+fn test_create_escrow_rejects_deadline_in_past() {
+    let env = Env::default();
+    let contract_id = env.register(BreadlineEscrow, ());
+    let buyer = Address::generate(&env);
+    let seller = Address::generate(&env);
+    let (token, _) = setup_token(&env);
+
+    env.mock_all_auths();
+    env.ledger().set_timestamp(500);
+
+    // Deadline equal to "now" is not strictly in the future.
+    let result = env.as_contract(&contract_id, || {
+        BreadlineEscrow::create_escrow(
+            env.clone(),
+            buyer.clone(),
+            seller.clone(),
+            token.clone(),
+            1000,
+            500,
+            String::from_str(&env, "test"),
+        )
+    });
+    assert!(matches!(result.unwrap_err(), EscrowError::InvalidDeadline));
+
+    // Deadline before "now" is also rejected.
+    let result = env.as_contract(&contract_id, || {
+        BreadlineEscrow::create_escrow(
+            env.clone(),
+            buyer.clone(),
+            seller.clone(),
+            token.clone(),
+            1000,
+            499,
+            String::from_str(&env, "test"),
+        )
+    });
+    assert!(matches!(result.unwrap_err(), EscrowError::InvalidDeadline));
+
+    // One second in the future is accepted.
+    let result = env.as_contract(&contract_id, || {
+        BreadlineEscrow::create_escrow(
+            env.clone(),
+            buyer.clone(),
+            seller.clone(),
+            token.clone(),
+            1000,
+            501,
+            String::from_str(&env, "test"),
+        )
+    });
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_fund_escrow_rejected_after_deadline() {
+    let env = Env::default();
+    let contract_id = env.register(BreadlineEscrow, ());
+    let buyer = Address::generate(&env);
+    let seller = Address::generate(&env);
+    let (token, sac_client) = setup_token(&env);
+
+    env.mock_all_auths();
+    sac_client.mint(&buyer, &10000);
+
+    create_test_escrow(&env, &contract_id, &buyer, &seller, &token, 1000, 100, "test");
+
+    // Buyer waits past the deadline before funding: the deposit is refused.
+    env.ledger().set_timestamp(100);
+    let result = env.as_contract(&contract_id, || BreadlineEscrow::fund_escrow(env.clone()));
+
+    assert!(matches!(result.unwrap_err(), EscrowError::DeadlinePassed));
+
+    // No tokens moved.
+    let token_client = TokenClient::new(&env, &token);
+    assert_eq!(token_client.balance(&buyer), 10000);
+    assert_eq!(token_client.balance(&contract_id), 0);
+}
+
+#[test]
+fn test_release_funds_rejected_after_deadline() {
+    let env = Env::default();
+    let contract_id = env.register(BreadlineEscrow, ());
+    let buyer = Address::generate(&env);
+    let seller = Address::generate(&env);
+    let (token, sac_client) = setup_token(&env);
+
+    env.mock_all_auths();
+    sac_client.mint(&buyer, &10000);
+
+    create_test_escrow(&env, &contract_id, &buyer, &seller, &token, 1000, 100, "test");
+    env.as_contract(&contract_id, || BreadlineEscrow::fund_escrow(env.clone())).unwrap();
+
+    // Past the deadline the seller can no longer be paid; only auto-refund remains.
+    env.ledger().set_timestamp(100);
+    let result = env.as_contract(&contract_id, || BreadlineEscrow::release_funds(env.clone()));
+
+    assert!(matches!(result.unwrap_err(), EscrowError::DeadlinePassed));
+
+    // The escrow is still Funded and the tokens are still in custody.
+    let token_client = TokenClient::new(&env, &token);
+    assert_eq!(token_client.balance(&seller), 0);
+    assert_eq!(token_client.balance(&contract_id), 1000);
+    let escrow = env.as_contract(&contract_id, || BreadlineEscrow::get_escrow(env.clone())).unwrap();
+    assert!(matches!(escrow.state, EscrowState::Funded));
+}
+
+#[test]
+fn test_disputed_auto_refund_on_expiry() {
+    let env = Env::default();
+    let contract_id = env.register(BreadlineEscrow, ());
+    let buyer = Address::generate(&env);
+    let seller = Address::generate(&env);
+    let (token, sac_client) = setup_token(&env);
+
+    env.mock_all_auths();
+    sac_client.mint(&buyer, &10000);
+
+    create_test_escrow(&env, &contract_id, &buyer, &seller, &token, 4000, 100, "service");
+    env.as_contract(&contract_id, || BreadlineEscrow::fund_escrow(env.clone())).unwrap();
+
+    let token_client = TokenClient::new(&env, &token);
+    assert_eq!(token_client.balance(&buyer), 6000);
+    assert_eq!(token_client.balance(&contract_id), 4000);
+
+    // Dispute freezes settlement: release and refund are both refused.
+    env.as_contract(&contract_id, || BreadlineEscrow::raise_dispute(env.clone(), seller.clone()))
+        .unwrap();
+    let escrow = env.as_contract(&contract_id, || BreadlineEscrow::get_escrow(env.clone())).unwrap();
+    assert!(matches!(escrow.state, EscrowState::Disputed));
+    assert!(env.as_contract(&contract_id, || BreadlineEscrow::release_funds(env.clone())).is_err());
+    assert!(
+        env.as_contract(&contract_id, || BreadlineEscrow::refund_buyer(env.clone(), buyer.clone()))
+            .is_err()
+    );
+
+    // Before the deadline the safety valve stays closed.
+    let result = env.as_contract(&contract_id, || BreadlineEscrow::auto_refund_if_expired(env.clone()));
+    assert!(matches!(result.unwrap_err(), EscrowError::DeadlineNotPassed));
+    assert_eq!(token_client.balance(&contract_id), 4000);
+
+    // Once the deadline passes, a disputed escrow refunds the buyer: funds are
+    // never trapped. Permissionless — triggered without buyer auth here.
+    env.ledger().set_timestamp(100);
+    let result = env.as_contract(&contract_id, || BreadlineEscrow::auto_refund_if_expired(env.clone()));
+
+    assert!(result.is_ok());
+    assert!(matches!(result.unwrap().state, EscrowState::Refunded));
+    assert_eq!(token_client.balance(&contract_id), 0);
+    assert_eq!(token_client.balance(&buyer), 10000);
+    assert_eq!(token_client.balance(&seller), 0);
+}
+
+#[test]
 fn test_full_custody_lifecycle() {
     let env = Env::default();
     let contract_id = env.register(BreadlineEscrow, ());

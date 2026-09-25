@@ -36,27 +36,43 @@ Prev: CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5  (deprecated, sta
 Interim (old WASM, deprecated): CD4KEZOSCS6KQCPT4XJPRV4P37PPBXAM7LYM2ALZP2KURG5SFS4MHPVI
 ```
 
-**WASM:** `contracts/target/wasm32v1-none/release/escrow.wasm` (19,130 bytes, protocol 26, SDK 26.1.1) — built via WSL `cargo build --target wasm32v1-none --release`; Windows SAC blocks native `build-script-build` so WSL is required for fresh builds. Verify with `stellar contract inspect --wasm <path>`.
+**WASM:** `contracts/target/wasm32v1-none/release/escrow.wasm` (21,166 bytes, protocol 26, SDK 26.1.1) — built with `cargo build --target wasm32v1-none --release`. This currently succeeds natively on Windows; WSL remains the fallback if a future toolchain trips Windows App Control again. Verify with `stellar contract inspect --wasm <path>` (or `stellar contract info` on CLI 27+).
 
 **Token (Testnet):** USDC SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` — documented placeholder from Stellar Docs/Circle; all custody functions use `soroban_sdk::token::TokenClient` (SDK 26) with `MuxedAddress` for transfers. Frontend `contract.ts` `USDC_TOKEN_ADDRESS` and `stellar.ts` `USDC_TOKEN_ADDRESS_STELLAR` both default to this address; `createEscrow` now requires `token: Address`.
 
 **Functions:**
-- `create_escrow(buyer, seller, token, amount, deadline, service_description: String)` — Initialize escrow; stores token address (String, not Symbol)
-- `fund_escrow()` — Buyer deposits: `TokenClient.transfer(buyer -> contract, amount)` then state = Funded
-- `release_funds()` — Buyer approves: `TokenClient.transfer(contract -> seller, amount)` then Released
+- `create_escrow(buyer, seller, token, amount, deadline, service_description: String)` — Initialize escrow; stores token address (String, not Symbol). Rejects `buyer == seller` and any deadline that is not in the future.
+- `fund_escrow()` — Buyer deposits: `TokenClient.transfer(buyer -> contract, amount)` then state = Funded. Rejected once the deadline has passed.
+- `release_funds()` — Buyer approves: `TokenClient.transfer(contract -> seller, amount)` then Released. Only allowed while the deadline has not passed.
 - `refund_buyer(caller)` — Buyer or seller: `TokenClient.transfer(contract -> buyer, amount)` then Refunded
-- `auto_refund_if_expired()` — Anyone after deadline: `TokenClient.transfer(contract -> buyer, amount)` then Refunded
-- `raise_dispute(caller)` — Either party opens dispute for arbitration (state only, no transfer)
+- `auto_refund_if_expired()` — Anyone, no auth, once the deadline has passed and state is `Funded` **or** `Disputed`: `TokenClient.transfer(contract -> buyer, amount)` then Refunded
+- `raise_dispute(caller)` — Either party opens a dispute (state only, no transfer)
 - `get_escrow()` — Read current escrow state
 - `is_expired()` — Check if deadline has passed
 
 > **MVP: one escrow per contract instance. Factory/multi-escrow is roadmap.** See comment in `contracts/contracts/escrow/src/lib.rs`. Each deployment holds a single `ESCROW_KEY`; deploying a factory that maps `escrow_id -> Escrow` is deferred to keep audit scope small.
 
+### Settlement Rules (deliberate, not accidental)
+
+| Rule | Why it exists |
+|------|---------------|
+| `buyer != seller` is enforced on-chain (`SameParties = 7`) | An escrow with one counterparty has no settlement meaning. The UI validates this before signing, but the contract is the authority. |
+| `deadline` must be strictly in the future (`InvalidDeadline = 8`) | An already-expired escrow could never be funded or released. |
+| `fund_escrow` rejects at/after the deadline (`DeadlinePassed = 9`) | Accepting a deposit that can no longer be released would trap the buyer's funds. |
+| `release_funds` rejects at/after the deadline (`DeadlinePassed = 9`) | Past the deadline the only settlement path is the permissionless auto-refund, so funds are never stranded. |
+| A dispute **freezes** settlement, it does not trap funds | `auto_refund_if_expired` accepts `Disputed` as well as `Funded`. A disputed escrow can always be resolved to a buyer refund at the deadline. |
+
+**What is NOT implemented (roadmap):** pre-deadline dispute resolution. There is no
+arbitrator, no jury and no multi-sig signature set in the contract. `raise_dispute`
+only records a flag that blocks `release_funds` and `refund_buyer`. Until arbitration
+ships, a disputed escrow resolves through the expiry safety valve (refund to buyer),
+which is the deliberate MVP trade-off: guaranteed exit over contested settlement.
+
 ### Audit Fix — Real USDC Custody (2026-09)
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| **Real USDC custody** | ✅ Implemented (Testnet) | `fund_escrow` / `release_funds` / `refund_buyer` / `auto_refund_if_expired` now execute `TokenClient::transfer` against the stored `token` address. Verified by 13 `cargo test` cases using `StellarAssetClient` mint + balance assertions (buyer decrease, contract custody, seller increase, refund). |
+| **Real USDC custody** | ✅ Implemented (Testnet) | `fund_escrow` / `release_funds` / `refund_buyer` / `auto_refund_if_expired` now execute `TokenClient::transfer` against the stored `token` address. Verified by 18 `cargo test` cases using `StellarAssetClient` mint + balance assertions (buyer decrease, contract custody, seller increase, refund). |
 | **Single-escrow per instance** | ✅ MVP documented | `// MVP: one escrow per contract instance. Factory/multi-escrow is roadmap.` retained in `lib.rs`; README documents roadmap. |
 | **`service_description: Symbol` -> `String`** | ✅ Fixed | `soroban_sdk::String` now; frontend `contract.ts` uses `nativeToScVal(description, {type:'string'})`. |
 | **Certificate SHA-256** | ✅ Real | `Certificados.tsx` uses `crypto.subtle.digest('SHA-256', new TextEncoder().encode(certContent))` instead of `setTimeout 1.2s` fake. |
@@ -116,7 +132,7 @@ npm run preview  # Preview production build locally
 breadline/
 ├── contracts/              # Soroban smart contract (Rust)
 │   └── contracts/escrow/
-│       └── src/lib.rs      # Escrow contract — 7 functions, 6 tests
+│       └── src/lib.rs      # Escrow contract — 8 functions, 18 tests
 ├── public/
 │   ├── landing.html        # Landing page (raw HTML, served at /)
 │   └── favicon.svg         # Branded favicon
@@ -144,7 +160,7 @@ breadline/
 - **Frontend:** React 19, TypeScript, Tailwind CSS v4, Vite 8
 - **Blockchain:** Stellar (Soroban smart contracts), Stellar SDK v17
 - **Wallet:** Freighter (browser extension)
-- **Token:** USDC on Stellar (6 decimals, 10,000,000 stroops = 1 USDC)
+- **Token:** USDC on Stellar — amounts are token **base units**, not stroops (a stroop is the 1e-7 XLM base unit). The code assumes a 7-decimal scale, i.e. `10,000,000` base units = 1 USDC; confirm it against the deployed SAC's `decimals()` before any mainnet use.
 - **Deploy:** Netlify (auto-deploy from GitHub)
 - **Contract:** Rust, Soroban SDK v26, Stellar CLI v27
 
@@ -172,12 +188,14 @@ cd contracts
 cargo test
 ```
 
-6 tests covering:
+18 tests covering:
 - Escrow creation and initialization
-- Fund deposit flow
-- Release funds (buyer authorization)
+- Rejection of `buyer == seller` (`SameParties`)
+- Rejection of a deadline that is not in the future (`InvalidDeadline`)
+- Fund deposit flow, including rejection after the deadline
+- Release funds (buyer authorization), including rejection after the deadline
 - Refund (buyer/seller authorization)
-- Dispute raising
+- Dispute raising, and `Disputed -> auto_refund` at the deadline with balance assertions
 - Deadline expiration check
 
 ### On-Chain Verification
@@ -193,7 +211,7 @@ Every transaction is verifiable on StellarTestnet:
 - **Programmable escrow (smart-contract, non-custodial):** Breadline never holds funds — the Soroban contract does. This is NOT regulated custody, 100% insured vault, or fideicomiso bancario.
 - **Immutable:** Once deposited, funds cannot be moved without proper authorization
 - **Multi-party:** Buyer and seller both have explicit roles and authorization gates
-- **Dispute resolution:** Either party can trigger arbitration
+- **Dispute resolution:** Either party can flag a dispute, which freezes settlement. On-chain arbitration before the deadline is roadmap; until then the expiry safety valve refunds the buyer.
 
 ## Argentina Builder Challenge (BAF × Stellar)
 

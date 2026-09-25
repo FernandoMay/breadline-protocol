@@ -1,8 +1,48 @@
 import { useState } from 'react';
+import * as StellarSdk from '@stellar/stellar-sdk';
 import { COUNTRIES, calculateFee, calculateNet, formatUSDC, ESCROW_CONTRACT_ID } from '../lib/stellar';
 import { createEscrowOnChain, USDC_TOKEN_ADDRESS } from '../lib/contract';
 import { useStellarWallet } from '../hooks/useStellarWallet';
 import Toast from '../components/Toast';
+
+// ---------------------------------------------------------------------------
+// Seller (counterparty) validation
+// ---------------------------------------------------------------------------
+
+/** Byte-wise account comparison, so formatting differences cannot hide a match. */
+function isSameStellarAccount(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (!b || !StellarSdk.StrKey.isValidEd25519PublicKey(b)) return false;
+  const da = StellarSdk.StrKey.decodeEd25519PublicKey(a);
+  const db = StellarSdk.StrKey.decodeEd25519PublicKey(b);
+  if (da.length !== db.length) return false;
+  for (let i = 0; i < da.length; i += 1) {
+    if (da[i] !== db[i]) return false;
+  }
+  return true;
+}
+
+const SELLER_REQUIRED = 'Ingresa la direccion Stellar de la contraparte (empieza por G).';
+const SELLER_INVALID = 'Direccion invalida: la clave publica de Stellar empieza por G y tiene 56 caracteres.';
+const SELLER_SAME_AS_BUYER = 'La contraparte no puede ser tu propia wallet. Ingresa otra direccion.';
+
+type SellerValidation = { error: string; address: string | null };
+
+/**
+ * The seller is a counterparty, never the connected wallet. The contract rejects
+ * buyer == seller on-chain, so this is the client-side half of the same rule.
+ */
+function validateSeller(raw: string, buyerAddress: string): SellerValidation {
+  const seller = raw.trim();
+  if (!seller) return { error: SELLER_REQUIRED, address: null };
+  if (!StellarSdk.StrKey.isValidEd25519PublicKey(seller)) {
+    return { error: SELLER_INVALID, address: null };
+  }
+  if (isSameStellarAccount(seller, buyerAddress)) {
+    return { error: SELLER_SAME_AS_BUYER, address: null };
+  }
+  return { error: '', address: seller };
+}
 
 export default function CrearEscrow() {
   const [form, setForm] = useState({
@@ -13,10 +53,12 @@ export default function CrearEscrow() {
     acceptanceCriteria: '',
     briefUrl: '',
     amount: '',
+    // Deliberately empty: pre-filling the connected wallet here is what made the
+    // escrow a buyer-to-itself transfer.
+    sellerAddress: '',
     deliveryDays: '15',
     reviewDays: '3',
     paymentMode: 'single' as 'single' | 'milestones',
-    arbitration: 'breadline',
   });
 
   const [copied, setCopied] = useState(false);
@@ -30,9 +72,15 @@ export default function CrearEscrow() {
   const amount = parseFloat(form.amount) || 0;
   const fee = calculateFee(amount);
   const net = calculateNet(amount);
+  // Only surfaced as an inline error once the field has content, so an untouched
+  // form is not shouting at the user before they have typed anything.
+  const sellerCheck = validateSeller(form.sellerAddress, wallet.address);
+  const sellerError = form.sellerAddress.trim() ? sellerCheck.error : '';
+  const shareLinkSeller = sellerCheck.address ?? '';
+
   const handleCopy = () => {
     const link = wallet.connected
-      ? `https://breadline.fi/escrow/${ESCROW_CONTRACT_ID}?seller=${wallet.address}`
+      ? `https://breadline.fi/escrow/${ESCROW_CONTRACT_ID}?seller=${shareLinkSeller || 'PENDIENTE'}`
       : `https://breadline.fi/escrow/${ESCROW_CONTRACT_ID}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
@@ -50,12 +98,18 @@ export default function CrearEscrow() {
       return;
     }
 
+    const seller = validateSeller(form.sellerAddress, wallet.address);
+    if (!seller.address) {
+      setToast({ message: seller.error, type: 'error' });
+      return;
+    }
+
     setGenerating(true);
 
     try {
       const result = await createEscrowOnChain(
         wallet.address,
-        wallet.address,
+        seller.address,
         parseFloat(form.amount),
         Math.floor(Date.now() / 1000) + parseInt(form.deliveryDays) * 86400,
         form.serviceTitle,
@@ -118,6 +172,25 @@ export default function CrearEscrow() {
               <span className="text-xs text-secondary font-medium uppercase">Receptor del Link</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div className="flex flex-col gap-1.5 sm:col-span-2">
+                <label className="text-xs text-on-surface font-semibold flex items-center justify-between">
+                  <span>Direccion Stellar de la contraparte</span>
+                  <span className="text-secondary font-normal text-[11px]">Receptor del deposito (vendedor)</span>
+                </label>
+                <input
+                  className={`w-full px-4 py-2.5 rounded-lg text-on-surface text-sm font-code-md focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-outline ${sellerError ? 'bg-error/5 ring-1 ring-error' : 'bg-surface-container-low focus:bg-surface-container-lowest'}`}
+                  placeholder="G... (public key de tu cliente)"
+                  value={form.sellerAddress}
+                  onChange={(e) => setForm({ ...form, sellerAddress: e.target.value })}
+                />
+                {sellerError ? (
+                  <span className="text-xs text-error">{sellerError}</span>
+                ) : (
+                  <span className="text-xs text-secondary">
+                    Quien recibe los fondos al liberarlos. No puede ser tu propia wallet.
+                  </span>
+                )}
+              </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
                 <label className="text-xs text-on-surface font-semibold flex items-center justify-between">
                   <span>Nombre comercial o Empresa cliente</span>
@@ -227,18 +300,21 @@ export default function CrearEscrow() {
             {/* Payment Mode Tabs */}
             <div className="grid grid-cols-2 gap-2 p-1 bg-surface-container-low rounded-xl mt-1">
               <button
+                type="button"
                 className={`py-2 px-4 rounded-lg text-xs text-center transition-all flex items-center justify-center gap-2 ${form.paymentMode === 'single' ? 'bg-surface-container-lowest text-primary font-bold shadow-sm' : 'text-secondary hover:text-on-surface'}`}
                 onClick={() => setForm({ ...form, paymentMode: 'single' })}
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                <span>Pago Único (Recomendado)</span>
+                <span>Pago Unico (Recomendado)</span>
               </button>
               <button
-                className={`py-2 px-4 rounded-lg text-xs text-center transition-all flex items-center justify-center gap-2 ${form.paymentMode === 'milestones' ? 'bg-surface-container-lowest text-primary font-bold shadow-sm' : 'text-secondary hover:text-on-surface'}`}
-                onClick={() => setForm({ ...form, paymentMode: 'milestones' })}
+                type="button"
+                disabled
+                title="El contrato maneja un unico monto y un unico deposito. Los hitos multiples no estan implementados."
+                className="py-2 px-4 rounded-lg text-xs text-center flex items-center justify-center gap-2 text-secondary/60 bg-surface-container-low cursor-not-allowed"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                <span>Por Hitos (30% / 70%)</span>
+                <span>Por hitos - no disponible en el MVP</span>
               </button>
             </div>
 
@@ -276,23 +352,30 @@ export default function CrearEscrow() {
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-on-surface font-semibold">Ventana de revisión del cliente</label>
+                <label className="text-xs text-on-surface font-semibold flex items-center gap-2">
+                  <span>Ventana de revision del cliente</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] bg-surface-container-high text-secondary">Roadmap</span>
+                </label>
                 <select
-                  className="w-full px-4 py-2.5 rounded-lg bg-surface-container-low text-on-surface text-sm focus:bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all appearance-none cursor-pointer"
+                  className="w-full px-4 py-2.5 rounded-lg bg-surface-container-low text-secondary text-sm focus:outline-none appearance-none cursor-not-allowed"
                   value={form.reviewDays}
+                  disabled
                   onChange={(e) => setForm({ ...form, reviewDays: e.target.value })}
                 >
-                  <option value="3">3 días hábiles (Auto-liberación)</option>
-                  <option value="5">5 días hábiles</option>
-                  <option value="7">7 días corridos</option>
+                  <option value="3">Sin ventana de revision en el MVP</option>
+                  <option value="5">Sin ventana de revision en el MVP</option>
+                  <option value="7">Sin ventana de revision en el MVP</option>
                 </select>
+                <span className="text-xs text-secondary">
+                  El contrato solo conoce una fecha limite. No hay auto-liberacion on-chain.
+                </span>
               </div>
             </div>
 
             <div className="p-3 bg-surface-container-low rounded-lg flex items-start gap-3">
               <svg className="w-5 h-5 text-primary shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
               <p className="text-xs text-on-surface-variant">
-                <strong>Garantía de Auto-Liberación:</strong> Si subes la entrega final y el cliente no pide ajustes formales ni aprueba en el plazo asignado, el contrato de Soroban transferirá automáticamente los fondos a tu balance.
+                <strong>Como funciona hoy:</strong> los fondos quedan bloqueados en el smart contract hasta que el comprador los libere al proveedor o solicite el reembolso. Si el comprador no hace nada, al cumplirse la fecha limite cualquier persona puede ejecutar el reembolso automatico y el dinero vuelve al comprador. El contrato <em>no</em> libera los fondos al proveedor por su cuenta.
               </p>
             </div>
           </section>
@@ -304,43 +387,42 @@ export default function CrearEscrow() {
                 <span className="w-7 h-7 rounded-full bg-primary-container text-on-primary flex items-center justify-center text-xs font-bold">4</span>
                 <h2 className="text-lg text-on-surface font-semibold">Arbitraje &amp; Mediación</h2>
               </div>
-              <span className="text-xs text-tertiary font-semibold flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-tertiary"></span> Activo
-              </span>
+              <div className="flex items-center gap-1 text-tertiary text-xs font-semibold">
+                <span className="px-2 py-0.5 rounded text-[10px] bg-surface-container-high text-secondary">Solo marca de disputa · Roadmap</span>
+              </div>
             </div>
             <div className="flex flex-col gap-3 pt-1">
-              <label className="flex items-start gap-3 p-3.5 rounded-xl bg-surface-container-low/60 hover:bg-surface-container-low cursor-pointer transition-all">
+              <label className="flex items-start gap-3 p-3.5 rounded-xl bg-surface-container-low/60 cursor-default">
                 <input
                   type="radio"
                   name="arbitrator"
-                  value="breadline"
-                  checked={form.arbitration === 'breadline'}
-                  onChange={() => setForm({ ...form, arbitration: 'breadline' })}
+                  checked
+                  readOnly
                   className="mt-1 text-primary focus:ring-primary"
                 />
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-on-surface font-semibold">Breadline Sovereign Mediation Desk</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] bg-tertiary-container text-on-tertiary-container font-semibold">Recomendado</span>
+                    <span className="text-sm text-on-surface font-semibold">Solo se marca la disputa (sin arbitraje)</span>
                   </div>
                   <p className="text-xs text-secondary mt-0.5">
-                    Comité de resolución comercial neutral multilingüe (EN/ES/PT). Dictamen imparcial vinculante en menos de 72 horas laborales en caso de controversia.
+                    El unico efecto on-chain es <code className="font-code-md">raise_dispute</code>: congela la liquidacion. No hay arbitro, ni jurado, ni multi-sig 2-de-3 todavia. Antes de la fecha limite no existe resolucion: al vencerse, cualquier persona puede ejecutar el reembolso automatico al comprador.
                   </p>
                 </div>
               </label>
-              <label className="flex items-start gap-3 p-3.5 rounded-xl bg-surface-container-low/60 hover:bg-surface-container-low cursor-pointer transition-all">
+              <label className="flex items-start gap-3 p-3.5 rounded-xl bg-surface-container-low/40 cursor-not-allowed opacity-60">
                 <input
                   type="radio"
                   name="arbitrator"
-                  value="trustless"
-                  checked={form.arbitration === 'trustless'}
-                  onChange={() => setForm({ ...form, arbitration: 'trustless' })}
+                  disabled
                   className="mt-1 text-primary focus:ring-primary"
                 />
                 <div className="flex flex-col">
-                  <span className="text-sm text-on-surface font-semibold">Árbitro On-chain Trustless Work Protocol</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-on-surface font-semibold">Árbitro On-chain Trustless Work Protocol</span>
+                    <span className="px-2 py-0.5 rounded text-[10px] bg-surface-container-high text-secondary">Roadmap</span>
+                  </div>
                   <p className="text-xs text-secondary mt-0.5">
-                    Mecanismo descentralizado de firmas multipartitas (multi-sig 2-de-3) con jurados criptográficos verificados en Stellar.
+                    No implementado. El mecanismo multi-sig 2-de-3 no existe en el contrato actual.
                   </p>
                 </div>
               </label>
@@ -407,7 +489,7 @@ export default function CrearEscrow() {
                   {generated && txHash
                     ? txHash
                     : wallet.connected
-                      ? `breadline.fi/escrow/${ESCROW_CONTRACT_ID}?seller=${wallet.address.slice(0, 8)}`
+                      ? `breadline.fi/escrow/${ESCROW_CONTRACT_ID}?seller=${shareLinkSeller ? shareLinkSeller.slice(0, 8) : 'PENDIENTE'}`
                       : `breadline.fi/escrow/${ESCROW_CONTRACT_ID}`}
                 </span>
                 <button

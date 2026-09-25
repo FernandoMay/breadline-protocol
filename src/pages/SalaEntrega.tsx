@@ -273,7 +273,7 @@ export default function SalaEntrega() {
               Sala de Entrega y Revision
             </h1>
             <p className="text-sm text-secondary max-w-xl">
-              El comprador tiene un plazo definido para revisar los entregables y liberar los fondos. El contrato Soroban aplica auto-liberacion si no hay respuesta antes del vencimiento.
+              El comprador tiene un plazo definido para revisar los entregables y liberar los fondos. Si no hay respuesta antes del vencimiento, el contrato ejecuta un reembolso automatico a favor del comprador.
             </p>
           </div>
           {escrow && (
@@ -526,7 +526,7 @@ export default function SalaEntrega() {
                     {/* Deadline refund notice */}
                     <div className="p-3 bg-secondary/5 rounded-lg border border-secondary/15">
                       <p className="text-xs text-secondary leading-relaxed">
-                        <strong className="text-on-surface">Política de vencimiento:</strong> Si el comprador no responde antes del plazo, cualquiera de las partes puede ejecutar un reembolso manual usando el botón "Rechazar Entrega" a continuación. El contrato no ejecuta reembolsos automáticos — la acción requiere autorización explícita de buyer o seller.
+                        <strong className="text-on-surface">Política de vencimiento:</strong> al vencer el plazo, el pago queda bloqueado y el contrato habilita el reembolso automático al comprador. Cualquiera puede ejecutarlo on-chain, sin autorización de ninguna de las partes.
                       </p>
                     </div>
 
@@ -577,7 +577,8 @@ export default function SalaEntrega() {
                   <div className="p-4 bg-error/10 rounded-xl border border-error/20 flex flex-col gap-2 items-center">
                     <svg className="w-8 h-8 text-error" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                     <span className="text-sm text-error font-bold">Disputa Activa</span>
-                    <span className="text-xs text-secondary">El contrato esta en proceso de arbitraje.</span>
+                    <span className="text-xs text-secondary">La disputa congela la liquidacion. El arbitraje previo al vencimiento no esta implementado todavia.</span>
+                    <span className="text-xs text-secondary mt-1">Al vencer el plazo, el contrato reembolsa al comprador de forma automatica.</span>
                   </div>
                 )}
 

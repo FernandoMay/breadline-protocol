@@ -523,7 +523,7 @@ export default function Dashboard() {
                 <div className="w-2 h-2 mt-2 rounded-full bg-secondary shrink-0"></div>
                 <div className="flex flex-col">
                   <span className="text-xs text-on-surface font-medium">USDC on Stellar</span>
-                  <span className="text-[12px] text-secondary">1 USDC = 10,000,000 stroops</span>
+                  <span className="text-[12px] text-secondary">1 USDC = 10,000,000 unidades base</span>
                 </div>
               </div>
             </div>
