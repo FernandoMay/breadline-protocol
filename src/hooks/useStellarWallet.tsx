@@ -135,13 +135,30 @@ function describeFailure(reason: string, fallback: string): string {
   return reason || fallback;
 }
 
+/**
+ * Freighter reports the network inconsistently across builds: some return the short
+ * name ("TESTNET"/"PUBLIC"), others return the full passphrase
+ * ("Test SDF Network ; September 2015"). Both are normalised to a short name here so
+ * a testnet user is never rejected for a cosmetic formatting difference.
+ */
+function normalizeNetwork(value: string): string {
+  const normalized = value.trim().toUpperCase();
+  if (!normalized) return '';
+  if (normalized === StellarSdk.Networks.TESTNET.toUpperCase()) return 'TESTNET';
+  if (normalized === StellarSdk.Networks.PUBLIC.toUpperCase()) return 'PUBLIC';
+  // Fall back to substring detection for builds that decorate the passphrase.
+  if (normalized.includes('TEST SDF NETWORK') || normalized === 'TESTNET') return 'TESTNET';
+  if (normalized.includes('PUBLIC GLOBAL STELLAR')) return 'PUBLIC';
+  return normalized;
+}
+
 /** Read the network Freighter is actually on. Older builds omit this, so failure is non-fatal. */
 async function readWalletNetwork(freighter: FreighterApi): Promise<string> {
   if (typeof freighter.getNetwork !== 'function') return '';
   try {
     const result = await freighter.getNetwork();
     const value = result?.network;
-    return typeof value === 'string' ? value.trim().toUpperCase() : '';
+    return typeof value === 'string' ? normalizeNetwork(value) : '';
   } catch {
     return '';
   }
@@ -229,7 +246,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
 
       const walletNetwork = await readWalletNetwork(freighter);
-      if (walletNetwork && walletNetwork !== REQUIRED_NETWORK) {
+      // Only block when the network is positively recognised as a different one.
+      // An unrecognised string must not block a legitimate testnet user: rejecting
+      // on uncertainty is what broke the connect flow in the first place.
+      const recognised = walletNetwork === REQUIRED_NETWORK || walletNetwork === 'PUBLIC';
+      if (recognised && walletNetwork !== REQUIRED_NETWORK) {
         networkMismatchRef.current = walletNetwork;
         return { ok: false, message: networkMismatchMessage(walletNetwork) };
       }
