@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useStellarWallet } from '../hooks/useStellarWallet';
+import type { StellarWalletValue } from '../hooks/useStellarWallet';
 import { truncateAddress } from '../lib/stellar';
 import Toast from './Toast';
 
@@ -12,6 +13,114 @@ const navItems = [
   { path: '/disputas-y-arbitraje', label: 'Disputas y Arbitraje', icon: 'M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3' },
   { path: '/certificados', label: 'Visor de Certificados', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
 ];
+
+interface FundingBannerProps {
+  wallet: StellarWalletValue;
+  onFunded: () => void;
+  onFailed: (message: string) => void;
+}
+
+/**
+ * Persistent testnet onboarding banner: a keypair that is not on the ledger, or that
+ * holds no XLM, connects fine and then fails every Soroban call with an opaque
+ * error. It is intentionally not dismissible — on testnet the funding step is a
+ * hard requirement — and disappears on its own once the account holds XLM.
+ */
+export function FundingBanner({ wallet, onFunded, onFailed }: FundingBannerProps) {
+  // The banner only renders while funding is needed, so the remaining possible
+  // reason is an account that is not on the ledger.
+  const reasonText =
+    wallet.fundingState === 'zero_balance'
+      ? 'Tu cuenta existe en Stellar Testnet, pero tiene 0 XLM. Sin saldo no podés pagar comisiones ni firmar transacciones de Soroban.'
+      : 'Esta cuenta todavía no existe en Stellar Testnet. Fondeala para poder firmar transacciones de Soroban.';
+
+  const handleFund = async () => {
+    const result = await wallet.fundTestnetXlm();
+    if (result.success) {
+      onFunded();
+    } else {
+      onFailed(result.error ?? 'No se pudo fondear la cuenta de testnet.');
+    }
+  };
+
+  return (
+    <div className="border-t border-outline-variant/30 bg-surface-container-lowest">
+      <div className="w-full max-w-[1440px] mx-auto px-4 md:px-8 py-3 flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-6">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <svg
+            className="w-5 h-5 shrink-0 mt-0.5 text-error"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 9v2m0 4h.01M5.07 19h13.86a2 2 0 001.74-3L13.74 4a2 2 0 00-3.48 0l-7 12a2 2 0 001.74 3z"
+            />
+          </svg>
+
+          <div className="min-w-0 flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="text-headline-sm font-semibold text-on-surface leading-tight">
+                Cuenta de testnet sin fondear
+              </span>
+              <span className="px-2 py-0.5 rounded-full bg-surface-container-low border border-outline-variant/40 text-label-sm font-semibold text-secondary uppercase tracking-wide">
+                XLM de prueba · sin valor real
+              </span>
+              <span className="font-code-md text-body-sm text-secondary">
+                {truncateAddress(wallet.address, 6)}
+              </span>
+            </div>
+
+            <p className="text-body-sm text-on-surface-variant leading-snug">{reasonText}</p>
+            <p className="text-label-sm text-secondary leading-snug">
+              USDC es un activo aparte: después del fondeo sigue en 0 y necesita una trustline, que no
+              se otorga automáticamente.
+            </p>
+
+            {wallet.fundingError && (
+              <p className="text-label-sm font-semibold text-error leading-snug" role="alert">
+                {wallet.fundingError}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="shrink-0">
+          <button
+            onClick={handleFund}
+            disabled={wallet.fundingLoading}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary text-sm font-semibold shadow-sm transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {wallet.fundingLoading ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            )}
+            <span>{wallet.fundingLoading ? 'Fondeando…' : 'Fondear XLM de prueba'}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Header() {
   const location = useLocation();
@@ -33,9 +142,11 @@ export default function Header() {
     setToast({ message: 'Wallet disconnected', type: 'info' });
   };
 
+  const showFundingBanner = wallet.connected && wallet.needsFunding;
+
   return (
-    <header className="fixed top-0 w-full z-50 bg-surface-container-lowest/95 backdrop-blur-md border-b border-outline-variant/30 shadow-[0_1px_3px_rgba(11,28,48,0.04)]">
-      <div className="h-20 w-full max-w-[1440px] mx-auto px-4 md:px-8 flex items-center justify-between gap-6">
+    <header className="sticky top-0 w-full z-50 bg-surface-container-lowest/95 backdrop-blur-md shadow-[0_1px_3px_rgba(11,28,48,0.04)]">
+      <div className="h-20 w-full max-w-[1440px] mx-auto px-4 md:px-8 flex items-center justify-between gap-6 border-b border-outline-variant/30">
         {/* Logo */}
         <div className="flex items-center gap-6 shrink-0">
           <a href="/" className="flex items-center gap-2">
@@ -139,6 +250,18 @@ export default function Header() {
           </div>
         </div>
       </div>
+      {showFundingBanner && (
+        <FundingBanner
+          wallet={wallet}
+          onFunded={() =>
+            setToast({
+              message: 'XLM de prueba recibidos. Ya podés operar en testnet.',
+              type: 'success',
+            })
+          }
+          onFailed={(message) => setToast({ message, type: 'error' })}
+        />
+      )}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </header>
   );

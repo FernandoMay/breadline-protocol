@@ -5,7 +5,9 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
-      <main className="w-full max-w-[1440px] mx-auto px-4 md:px-8 pt-20 flex-1">
+      {/* The header is sticky and in normal flow, so it already occupies its own
+          space; pages no longer need top padding to clear it. */}
+      <main className="w-full max-w-[1440px] mx-auto px-4 md:px-8 flex-1">
         <Outlet />
       </main>
       <footer className="w-full border-t border-outline-variant/30 bg-surface-container-lowest py-6 mt-auto">
