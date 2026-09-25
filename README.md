@@ -10,7 +10,7 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 |-----------|-----|
 | **Landing Page** | [breadlineprotocol.netlify.app](https://breadlineprotocol.netlify.app/) |
 | **App (Dashboard)** | [breadlineprotocol.netlify.app/app](https://breadlineprotocol.netlify.app/app/dashboard) |
-| **Smart Contract** | [StellarExpert — CCFNKL...YBIGM (v3)](https://stellar.expert/explorer/testnet/contract/CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM) |
+| **Smart Contract** | [StellarExpert — CB7I2G...6L6J (v4)](https://stellar.expert/explorer/testnet/contract/CB7I2GURQDV4Q7YAT2PZAG3ZNFQJ37GI6MWZ4P3W7SUCJZPSHP2G6L6J) |
 | **GitHub** | [github.com/FernandoMay/breadline-protocol](https://github.com/FernandoMay/breadline-protocol) |
 
 ## Protocol Proof — Verificable on-chain (Stellar Testnet)
@@ -18,11 +18,11 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 | Field | Value |
 |-------|-------|
 | **Network** | Stellar Testnet |
-| **Contract** | `CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM` (breadline-v3 — real USDC custody) · prev `CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5` deprecated |
+| **Contract** | `CB7I2GURQDV4Q7YAT2PZAG3ZNFQJ37GI6MWZ4P3W7SUCJZPSHP2G6L6J` (breadline-v3 — real USDC custody) · prev `CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5` deprecated |
 | **Asset** | USDC (Testnet) — Token SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
-| **Explorer** | [stellar.expert — Testnet contract v3](https://stellar.expert/explorer/testnet/contract/CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM) · [Deploy Tx v3](https://stellar.expert/explorer/testnet/tx/f1dcb55844b59706ca4626c7a9922ef76cd1ad34a512bd5e8b29fc5ba52d86ad) · [WASM Tx](https://stellar.expert/explorer/testnet/tx/72392a45d2b50883dd2885c5da861ec84f366298549bfc3b2d83d8f2f6ed035f) |
+| **Explorer** | [stellar.expert — Testnet contract v3](https://stellar.expert/explorer/testnet/contract/CB7I2GURQDV4Q7YAT2PZAG3ZNFQJ37GI6MWZ4P3W7SUCJZPSHP2G6L6J) · [Deploy Tx v3](https://stellar.expert/explorer/testnet/tx/f1dcb55844b59706ca4626c7a9922ef76cd1ad34a512bd5e8b29fc5ba52d86ad) · [WASM Tx](https://stellar.expert/explorer/testnet/tx/72392a45d2b50883dd2885c5da861ec84f366298549bfc3b2d83d8f2f6ed035f) |
 | **GitHub** | [github.com/FernandoMay/breadline-protocol](https://github.com/FernandoMay/breadline-protocol) |
-| **Version** | `v0.5.0-breadline-v3 (Testnet)` — Real USDC custody · Stellar Testnet · Soroban (no mainnet) |
+| **Version** | `v0.6.0-breadline-v4 (Testnet)` — Real USDC custody · Stellar Testnet · Soroban (no mainnet) |
 | **Status** | Implementado: Stellar/Soroban + USDC escrow + Testnet settlement + TokenClient/MuxedAddress custody \u00b7 Prototype: payment link/wallet/disputas \u00b7 Planned: SEP-24/SPEI/PIX/CBU (partner integration) |
 
 > Demo escrow ESC-9482 (2,500 USDC) es **Transacción demo — fondos no reales · Testnet**.
@@ -31,7 +31,7 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 
 **Contract ID (Testnet):**
 ```
-CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM  (breadline-v3, alias breadline-v3)
+CB7I2GURQDV4Q7YAT2PZAG3ZNFQJ37GI6MWZ4P3W7SUCJZPSHP2G6L6J  (breadline-v4, alias breadline-v4) - Deploy tx: https://stellar.expert/explorer/testnet/tx/20f5439407171648b54a529a8efa2a6a9d2a69a6174756a2d40ea220451ad50b - WASM: b911f9074b8caf8f44d137071d0d3b5800742a1437eeb2d4eabd11ea8857109b (21,166 bytes)
 Prev: CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5  (deprecated, state-only)
 Interim (old WASM, deprecated): CD4KEZOSCS6KQCPT4XJPRV4P37PPBXAM7LYM2ALZP2KURG5SFS4MHPVI
 ```
@@ -115,7 +115,7 @@ The app will be available at `http://localhost:5173/app/dashboard`.
 Create a `.env` file with:
 
 ```
-VITE_ESCROW_CONTRACT_ID=CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM
+VITE_ESCROW_CONTRACT_ID=CB7I2GURQDV4Q7YAT2PZAG3ZNFQJ37GI6MWZ4P3W7SUCJZPSHP2G6L6J
 # Token (optional, defaults to CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA)
 ```
 

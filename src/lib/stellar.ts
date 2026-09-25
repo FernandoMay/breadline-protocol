@@ -8,9 +8,9 @@ export const sorobanServer = new StellarSdk.rpc.Server(SOROBAN_RPC_URL);
 
 export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
 
-// Deployed escrow contract on Testnet — breadline-v3 (real USDC custody, token+String)
+// Deployed escrow contract on Testnet — breadline-v4 (real USDC custody + dispute dead-end fix + deadline guards)
 export const ESCROW_CONTRACT_ID =
-  import.meta.env.VITE_ESCROW_CONTRACT_ID || 'CCFNKL6YCRHPYCQ7M4SQXY2N3GACAMFJDVHPJO7AZPH3T46GHMIYBIGM';
+  import.meta.env.VITE_ESCROW_CONTRACT_ID || 'CB7I2GURQDV4Q7YAT2PZAG3ZNFQJ37GI6MWZ4P3W7SUCJZPSHP2G6L6J';
 
 export const CURRENCIES = ['USDC', 'USD'] as const;
 
