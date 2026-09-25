@@ -10,7 +10,7 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 |-----------|-----|
 | **Landing Page** | [breadlineprotocol.netlify.app](https://breadlineprotocol.netlify.app/) |
 | **App (Dashboard)** | [breadlineprotocol.netlify.app/app](https://breadlineprotocol.netlify.app/app/dashboard) |
-| **Smart Contract** | [StellarExpert — CB7I2G...6L6J (v4)](https://stellar.expert/explorer/testnet/contract/CB7I2GURQDV4Q7YAT2PZAG3ZNFQJ37GI6MWZ4P3W7SUCJZPSHP2G6L6J) |
+| **Smart Contract** | [StellarExpert — CB7I2G...6L6J (v4)](https://stellar.expert/explorer/testnet/contract/CBY6UC4IMSIA6AGRNXOIPENIYNNOL2LJG4O5QLRLKNWACAEZ2DIUYAWL) |
 | **GitHub** | [github.com/FernandoMay/breadline-protocol](https://github.com/FernandoMay/breadline-protocol) |
 
 ## Protocol Proof — Verificable on-chain (Stellar Testnet)
@@ -18,9 +18,9 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 | Field | Value |
 |-------|-------|
 | **Network** | Stellar Testnet |
-| **Contract** | `CB7I2GURQDV4Q7YAT2PZAG3ZNFQJ37GI6MWZ4P3W7SUCJZPSHP2G6L6J` (breadline-v3 — real USDC custody) · prev `CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5` deprecated |
+| **Contract** | `CBY6UC4IMSIA6AGRNXOIPENIYNNOL2LJG4O5QLRLKNWACAEZ2DIUYAWL` (breadline-v3 — real USDC custody) · prev `CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5` deprecated |
 | **Asset** | USDC (Testnet) — Token SAC `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA` |
-| **Explorer** | [stellar.expert — Testnet contract v3](https://stellar.expert/explorer/testnet/contract/CB7I2GURQDV4Q7YAT2PZAG3ZNFQJ37GI6MWZ4P3W7SUCJZPSHP2G6L6J) · [Deploy Tx v3](https://stellar.expert/explorer/testnet/tx/f1dcb55844b59706ca4626c7a9922ef76cd1ad34a512bd5e8b29fc5ba52d86ad) · [WASM Tx](https://stellar.expert/explorer/testnet/tx/72392a45d2b50883dd2885c5da861ec84f366298549bfc3b2d83d8f2f6ed035f) |
+| **Explorer** | [stellar.expert — Testnet contract v3](https://stellar.expert/explorer/testnet/contract/CBY6UC4IMSIA6AGRNXOIPENIYNNOL2LJG4O5QLRLKNWACAEZ2DIUYAWL) · [Deploy Tx v3](https://stellar.expert/explorer/testnet/tx/f1dcb55844b59706ca4626c7a9922ef76cd1ad34a512bd5e8b29fc5ba52d86ad) · [WASM Tx](https://stellar.expert/explorer/testnet/tx/72392a45d2b50883dd2885c5da861ec84f366298549bfc3b2d83d8f2f6ed035f) |
 | **GitHub** | [github.com/FernandoMay/breadline-protocol](https://github.com/FernandoMay/breadline-protocol) |
 | **Version** | `v0.6.0-breadline-v4 (Testnet)` — Real USDC custody · Stellar Testnet · Soroban (no mainnet) |
 | **Status** | Implementado: Stellar/Soroban + USDC escrow + Testnet settlement + TokenClient/MuxedAddress custody \u00b7 Prototype: payment link/wallet/disputas \u00b7 Planned: SEP-24/SPEI/PIX/CBU (partner integration) |
@@ -31,7 +31,7 @@ Breadline lets freelancers and agencies in LATAM receive guaranteed payments fro
 
 **Contract ID (Testnet):**
 ```
-CB7I2GURQDV4Q7YAT2PZAG3ZNFQJ37GI6MWZ4P3W7SUCJZPSHP2G6L6J  (breadline-v4, alias breadline-v4) - Deploy tx: https://stellar.expert/explorer/testnet/tx/20f5439407171648b54a529a8efa2a6a9d2a69a6174756a2d40ea220451ad50b - WASM: b911f9074b8caf8f44d137071d0d3b5800742a1437eeb2d4eabd11ea8857109b (21,166 bytes)
+CBY6UC4IMSIA6AGRNXOIPENIYNNOL2LJG4O5QLRLKNWACAEZ2DIUYAWL  (breadline-v4, alias breadline-v4) - Deploy tx: https://stellar.expert/explorer/testnet/tx/20f5439407171648b54a529a8efa2a6a9d2a69a6174756a2d40ea220451ad50b - WASM: b911f9074b8caf8f44d137071d0d3b5800742a1437eeb2d4eabd11ea8857109b (21,166 bytes)
 Prev: CARLT3ENKBA5KTWE4R4PSHX6YAI6P6FFU6ZHNKNTSUINRG6FM554YCU5  (deprecated, state-only)
 Interim (old WASM, deprecated): CD4KEZOSCS6KQCPT4XJPRV4P37PPBXAM7LYM2ALZP2KURG5SFS4MHPVI
 ```
@@ -51,6 +51,50 @@ Interim (old WASM, deprecated): CD4KEZOSCS6KQCPT4XJPRV4P37PPBXAM7LYM2ALZP2KURG5S
 - `is_expired()` — Check if deadline has passed
 
 > **MVP: one escrow per contract instance. Factory/multi-escrow is roadmap.** See comment in `contracts/contracts/escrow/src/lib.rs`. Each deployment holds a single `ESCROW_KEY`; deploying a factory that maps `escrow_id -> Escrow` is deferred to keep audit scope small.
+
+## Per-User Contract Instances
+
+**The contract is single-use, so a single shared contract id can only ever serve one escrow — for the entire network.** `create_escrow` sets an `INITIALIZED` instance flag; every later call against that same instance fails with `AlreadyInitialized` forever. There is no reset and no factory.
+
+Breadline therefore resolves the contract id **per wallet** instead of hardcoding one:
+
+| | Seed instance | User-deployed instance |
+|---|---|---|
+| Contract id | `VITE_ESCROW_CONTRACT_ID` (`CBY6UC4I…AWL`) | new `C…` id, one per wallet per escrow |
+| Stored in | `src/lib/stellar.ts` (`ESCROW_CONTRACT_ID`) | `localStorage["breadline.activeEscrow.<G-address>"]` |
+| Who deployed it | the Breadline team, once | the connected wallet, on demand |
+| Uses left | **one**, for the whole network | one, then replaced |
+| Label in the UI | `Instancia compartida (semilla)` | `Instancia propia` |
+
+**Resolution rule** (`src/lib/activeEscrow.ts`): the stored id for the connected wallet if there is one and it is a valid contract id, otherwise the seed. `useActiveEscrowId(address)` exposes it to React; every page passes it to `fetchEscrow` / `fund` / `release` / `refund` / `dispute` / `auto_refund`, so no read or write can drift onto the seed once a real instance exists.
+
+**What happens on a second escrow:** `CrearEscrow` probes the stored instance with `get_escrow`. While the instance is unused the call returns `NotInitialized` and it is reused; once it holds an escrow, or the probe cannot prove the instance is usable, the app deploys a fresh instance and stores the new id. The **Nuevo escrow** button does the same on demand, clearing the stored id first.
+
+**Honest caveats:**
+
+- The seed id in `VITE_ESCROW_CONTRACT_ID` is **not a reliable fallback** once anyone has used it. It is a bootstrap instance, not a shared service. With per-user deploys it is only what a first-time visitor sees before their first escrow.
+- `localStorage` is per browser, not per chain. Clearing site data, or switching browser, loses the id — the next page load falls back to the seed and the app will deploy a new instance on the next escrow. The previously deployed instance still exists on-chain and its history is not reachable from the UI without the id.
+- Instances deployed by a wallet are **not** discoverable from the app. There is no on-chain registry, which is the same gap a factory contract would close.
+- Every deploy costs the user two signatures (WASM upload + contract creation) and two transactions of fees.
+
+### How the deploy works
+
+`deployEscrowContract()` in `src/lib/contract.ts` fetches the shipped `public/escrow.wasm` and runs **two transactions**:
+
+1. `Operation.uploadContractWasm({ wasm })`
+2. `Operation.createCustomContract({ address: <deployer>, wasmHash, salt })`
+
+**Why not one transaction with two operations:** a Soroban transaction may contain at most **one** operation. A two-operation envelope is rejected by the network with `Transaction contains more than one operation` (verified against `soroban-testnet.stellar.org`). The two-transaction flow is therefore required, not a convenience.
+
+**Why `Contract.deploy` is not used:** `@stellar/stellar-sdk` 17.1.0 exposes no `Contract.deploy` and no `AssembledTransaction` from its main entry point, and the available `Operation.createCustomContract` requires a real deployer `Address` rather than the legacy `ScVal::Void` placeholder. The flow uses `TransactionBuilder` + `Operation.uploadContractWasm` / `Operation.createCustomContract` directly.
+
+**Why `wasmHash` is just `sha256(wasm)`:** `createContract` is keyed by `ContractCode.hash`, which is the SHA-256 of the WASM bytes — *not* the hash of the `ContractCodeEntry` XDR. Both were tried against testnet: the entry-XDR hash fails with `Wasm does not exist`, the plain SHA-256 succeeds. The local `escrow.wasm` is byte-identical to the on-chain v4 WASM (`b911f9074b8caf8f44d137071d0d3b5800742a1437eeb2d4eabd11ea8857109b`, 21,166 bytes), and the deploy re-checks the locally computed hash against the value the upload transaction returned before declaring success.
+
+**Where the new contract id comes from:** the `createContract` simulation returns it as an `ScVal::Address`, so the app knows the id before the transaction is even submitted. It is read from `simulation.result.retval` and then verified by polling both transactions until they are in a ledger.
+
+The salt is a random 32 bytes generated once per deploy and held fixed across a sequence-stale retry, so a rebuild cannot silently produce a different contract id than the one shown to the user.
+
+> **Not verified end-to-end.** The deploy path was validated by simulation against Testnet (operation shape, wasm hash, salt, id derivation, `prepareTransaction`) and by building against the installed SDK's own types. A **real** deploy requires a wallet signature, so it has not been executed. See the manual verification steps below.
 
 ### Settlement Rules (deliberate, not accidental)
 
@@ -115,9 +159,11 @@ The app will be available at `http://localhost:5173/app/dashboard`.
 Create a `.env` file with:
 
 ```
-VITE_ESCROW_CONTRACT_ID=CB7I2GURQDV4Q7YAT2PZAG3ZNFQJ37GI6MWZ4P3W7SUCJZPSHP2G6L6J
+VITE_ESCROW_CONTRACT_ID=CBY6UC4IMSIA6AGRNXOIPENIYNNOL2LJG4O5QLRLKNWACAEZ2DIUYAWL
 # Token (optional, defaults to CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA)
 ```
+
+> `VITE_ESCROW_CONTRACT_ID` is the **seed** instance only, used until the connected wallet deploys its own. It is single-use: once anyone runs `create_escrow` on it, it is spent for everyone. It is not a fallback that keeps working — see [Per-User Contract Instances](#per-user-contract-instances).
 
 ### Build & Deploy
 
@@ -135,12 +181,14 @@ breadline/
 │       └── src/lib.rs      # Escrow contract — 8 functions, 18 tests
 ├── public/
 │   ├── landing.html        # Landing page (raw HTML, served at /)
+│   ├── escrow.wasm         # Contract WASM, shipped so the browser can deploy instances
 │   └── favicon.svg         # Branded favicon
 ├── src/
 │   ├── components/         # Header, Layout, Toast
 │   ├── hooks/              # useStellarWallet (Freighter integration)
 │   ├── lib/
-│   │   ├── contract.ts     # Soroban contract interaction layer
+│   │   ├── contract.ts     # Soroban contract interaction layer + per-user deploy
+│   │   ├── activeEscrow.ts # Which contract id this wallet is talking to (localStorage)
 │   │   └── stellar.ts      # Stellar SDK setup + utilities
 │   ├── pages/
 │   │   ├── Dashboard.tsx           # Real on-chain escrow data
@@ -166,6 +214,7 @@ breadline/
 
 ## Protocol Flow
 
+0. **A fresh instance is deployed for this wallet** (once per escrow) — the contract is single-use, so it cannot be shared. See [Per-User Contract Instances](#per-user-contract-instances).
 1. **Seller creates escrow** — specifies buyer, seller, amount, deadline, description
 2. **Buyer funds escrow** — deposits USDC via Freighter wallet
 3. **Seller delivers work** — uploads deliverable, communicates via in-app channel
@@ -205,6 +254,29 @@ Every transaction is verifiable on StellarTestnet:
 2. Perform any action (create, fund, release)
 3. Copy the transaction hash from the confirmation
 4. View on [StellarExpert](https://stellar.expert/explorer/testnet)
+
+### Manual Verification — Per-User Deploy (NOT yet run)
+
+The per-user deploy path is implemented and simulation-verified, but no real deploy
+has been executed because it needs a wallet signature. Someone with Freighter must
+run this once against Testnet:
+
+1. `npm run dev`, open `http://localhost:5173/app/crear-escrow`, connect Freighter on **Testnet**, and make sure the account has XLM (`fundTestnetXlm`).
+2. Fill the form with a **different** `G…` address as the counterparty, then submit.
+3. **Expect two Freighter prompts** (WASM upload, then contract creation). The panel should show `Descargando…` → `Subiendo el contrato a Stellar (1 de 2 firmas)` → `Creando tu instancia en la red (2 de 2 firmas)` → `Esperando confirmacion`.
+4. **Expect the label to flip** from `Instancia compartida (semilla)` to `Instancia propia`, showing a new `C…` id that is **not** `CBY6UC4I…AWL`.
+5. Confirm in DevTools → Application → Local Storage that `breadline.activeEscrow.<your G address>` is set to that id.
+6. Check [StellarExpert](https://stellar.expert/explorer/testnet) that the two txs are `successful: true` and that the new contract instance exists.
+7. Run `stellar contract info <new-id> --network testnet` and confirm the exported functions match the seed's.
+8. Create a **second** escrow from the same wallet. **Expect a fresh deploy** (two more prompts, a different `C…` id) rather than `AlreadyInitialized`.
+9. Click **Nuevo escrow** and confirm it deploys on demand and resets the label/id.
+10. Open `/app/dashboard`, `/app/sala-de-entrega`, `/app/disputas-y-arbitraje` and `/app/certificados` and confirm each shows the **new** active id, not the seed.
+11. Reload the page and confirm the active id survives (it is read from `localStorage`).
+12. Negative check: confirm the seed instance was left untouched and still reports `NotInitialized` for `get_escrow`.
+
+A failure mode worth watching for on step 3: if Freighter is set to a non-Testnet
+network the wallet hook refuses to sign, and the deploy aborts before any
+transaction is submitted.
 
 ### Security Model
 

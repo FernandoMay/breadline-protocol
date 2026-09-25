@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useStellarWallet } from '../hooks/useStellarWallet';
 import { fetchEscrow, fetchIsExpired, formatScAmount } from '../lib/contract';
 import type { OnChainEscrow, OnChainEscrowState } from '../lib/contract';
+import { useActiveEscrowId } from '../lib/activeEscrow';
 import { formatUSDC, truncateHash } from '../lib/stellar';
 
 // ─── On-chain state → display helpers ───
@@ -58,6 +59,8 @@ function deadlineToDate(timestamp: bigint): string {
 
 export default function Dashboard() {
   const wallet = useStellarWallet();
+  // This wallet's own instance; re-reads whenever a new one is deployed.
+  const activeContractId = useActiveEscrowId(wallet.address);
   const [escrow, setEscrow] = useState<OnChainEscrow | null>(null);
   const [isExpired, setIsExpired] = useState(false);
   const [loadingEscrow, setLoadingEscrow] = useState(true);
@@ -65,10 +68,10 @@ export default function Dashboard() {
   const loadEscrow = useCallback(async () => {
     setLoadingEscrow(true);
     try {
-      const data = await fetchEscrow();
+      const data = await fetchEscrow(activeContractId);
       setEscrow(data);
       if (data) {
-        const expired = await fetchIsExpired();
+        const expired = await fetchIsExpired(activeContractId);
         setIsExpired(expired);
       }
     } catch {
@@ -76,7 +79,7 @@ export default function Dashboard() {
     } finally {
       setLoadingEscrow(false);
     }
-  }, []);
+  }, [activeContractId]);
 
   useEffect(() => {
     loadEscrow();

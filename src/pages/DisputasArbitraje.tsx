@@ -6,9 +6,9 @@ import {
   refundEscrowOnChain,
   releaseFundsOnChain,
   formatScAmount,
-  ESCROW_CONTRACT_ID,
 } from '../lib/contract';
 import type { OnChainEscrow } from '../lib/contract';
+import { useActiveEscrowId } from '../lib/activeEscrow';
 import { truncateAddress } from '../lib/stellar';
 
 // ---------------------------------------------------------------------------
@@ -51,6 +51,8 @@ function StateBadge({ state }: { state: string }) {
 
 export default function DisputasArbitraje() {
   const wallet = useStellarWallet();
+  // The contract this wallet is really operating on.
+  const activeContractId = useActiveEscrowId(wallet.address);
   const [escrow, setEscrow] = useState<OnChainEscrow | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -61,14 +63,14 @@ export default function DisputasArbitraje() {
     setLoading(true);
     setError('');
     try {
-      const data = await fetchEscrow();
+      const data = await fetchEscrow(activeContractId);
       setEscrow(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch escrow');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeContractId]);
 
   useEffect(() => {
     loadEscrow();
@@ -80,7 +82,7 @@ export default function DisputasArbitraje() {
     setError('');
     setSuccessMsg('');
     try {
-      const result = await raiseDisputeOnChain(wallet.address, wallet.signTransaction);
+      const result = await raiseDisputeOnChain(wallet.address, wallet.signTransaction, activeContractId);
       if (result.success) {
         setSuccessMsg(
           'Dispute flag set on-chain. Settlement is frozen. On-chain resolution before the deadline is not implemented yet: at the deadline anyone can trigger the auto-refund to the buyer.'
@@ -102,7 +104,7 @@ export default function DisputasArbitraje() {
     setError('');
     setSuccessMsg('');
     try {
-      const result = await refundEscrowOnChain(wallet.address, wallet.signTransaction);
+      const result = await refundEscrowOnChain(wallet.address, wallet.signTransaction, activeContractId);
       if (result.success) {
         setSuccessMsg('Refund to buyer executed on-chain.');
         await loadEscrow();
@@ -122,7 +124,7 @@ export default function DisputasArbitraje() {
     setError('');
     setSuccessMsg('');
     try {
-      const result = await releaseFundsOnChain(wallet.signTransaction);
+      const result = await releaseFundsOnChain(wallet.signTransaction, activeContractId);
       if (result.success) {
         setSuccessMsg('Funds released to seller on-chain.');
         await loadEscrow();
@@ -176,7 +178,7 @@ export default function DisputasArbitraje() {
             <div className="flex items-center gap-2">
               <StateBadge state={escrow.state} />
               <span className="font-code-md text-[11px] px-2 py-0.5 rounded-md bg-surface-container-low text-secondary">
-                {ESCROW_CONTRACT_ID}
+                {activeContractId}
               </span>
             </div>
             <h1 className="text-3xl md:text-4xl text-on-surface tracking-tight font-bold">
@@ -219,7 +221,7 @@ export default function DisputasArbitraje() {
               <div className="flex flex-wrap items-center gap-2">
                 <StateBadge state={escrow.state} />
                 <span className="font-code-md text-[11px] px-2 py-0.5 rounded-md bg-surface-container-low text-secondary">
-                  {ESCROW_CONTRACT_ID}
+                  {activeContractId}
                 </span>
               </div>
               <h1 className="text-3xl md:text-4xl text-on-surface tracking-tight font-bold">
@@ -301,7 +303,7 @@ export default function DisputasArbitraje() {
             <div className="flex flex-wrap items-center gap-2">
               <StateBadge state={escrow.state} />
               <span className="font-code-md text-[11px] px-2 py-0.5 rounded-md bg-surface-container-low text-secondary">
-                {ESCROW_CONTRACT_ID}
+                {activeContractId}
               </span>
             </div>
             <h1 className="text-3xl md:text-4xl text-on-surface tracking-tight font-bold">

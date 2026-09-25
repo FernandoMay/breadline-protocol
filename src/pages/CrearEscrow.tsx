@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import * as StellarSdk from '@stellar/stellar-sdk';
-import { COUNTRIES, calculateFee, calculateNet, formatUSDC, ESCROW_CONTRACT_ID } from '../lib/stellar';
-import { createEscrowOnChain, USDC_TOKEN_ADDRESS } from '../lib/contract';
+import { COUNTRIES, calculateFee, calculateNet, formatUSDC } from '../lib/stellar';
+import { createEscrowOnChain, deployEscrowContract, probeContract, USDC_TOKEN_ADDRESS } from '../lib/contract';
+import type { DeployStep } from '../lib/contract';
+import { getActiveEscrow, setActiveEscrowId, clearActiveEscrowId, useActiveEscrowId } from '../lib/activeEscrow';
 import { useStellarWallet } from '../hooks/useStellarWallet';
 import Toast from '../components/Toast';
 
@@ -25,6 +27,14 @@ function isSameStellarAccount(a: string, b: string): boolean {
 const SELLER_REQUIRED = 'Ingresa la direccion Stellar de la contraparte (empieza por G).';
 const SELLER_INVALID = 'Direccion invalida: la clave publica de Stellar empieza por G y tiene 56 caracteres.';
 const SELLER_SAME_AS_BUYER = 'La contraparte no puede ser tu propia wallet. Ingresa otra direccion.';
+
+/** What the deploy is doing right now, in the user's words. */
+const DEPLOY_STEP_LABEL: Record<DeployStep, string> = {
+  'fetching-wasm': 'Descargando el codigo del contrato',
+  'uploading-wasm': 'Subiendo el contrato a Stellar (1 de 2 firmas)',
+  'creating-contract': 'Creando tu instancia en la red (2 de 2 firmas)',
+  confirming: 'Esperando confirmacion de la red',
+};
 
 type SellerValidation = { error: string; address: string | null };
 
@@ -65,9 +75,16 @@ export default function CrearEscrow() {
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [deployedContractId, setDeployedContractId] = useState<string | null>(null);
+  const [deployStep, setDeployStep] = useState<DeployStep | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   const wallet = useStellarWallet();
+
+  // Re-resolved on every deploy/clear, so the link and the labels below always
+  // show the contract this wallet is really talking to.
+  const activeContractId = useActiveEscrowId(wallet.address);
+  const isUserDeployed = getActiveEscrow(wallet.address).isUserDeployed;
 
   const amount = parseFloat(form.amount) || 0;
   const fee = calculateFee(amount);
@@ -80,11 +97,67 @@ export default function CrearEscrow() {
 
   const handleCopy = () => {
     const link = wallet.connected
-      ? `https://breadline.fi/escrow/${ESCROW_CONTRACT_ID}?seller=${shareLinkSeller || 'PENDIENTE'}`
-      : `https://breadline.fi/escrow/${ESCROW_CONTRACT_ID}`;
+      ? `https://breadline.fi/escrow/${activeContractId}?seller=${shareLinkSeller || 'PENDIENTE'}`
+      : `https://breadline.fi/escrow/${activeContractId}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2800);
+  };
+
+  /**
+   * Guarantee a fresh, unused instance for this wallet and return its id.
+   *
+   * The stored instance is reused only when `get_escrow` proves it is still
+   * free (`NotInitialized`). Once it holds an escrow — or the probe cannot prove
+   * anything — a new instance is deployed, because the contract is single-use
+   * and `create_escrow` on a spent instance fails with `AlreadyInitialized`.
+   */
+  const ensureFreshContract = async (forceNew: boolean): Promise<string> => {
+    const stored = getActiveEscrow(wallet.address);
+
+    if (!forceNew && stored.isUserDeployed) {
+      const probe = await probeContract(stored.contractId);
+      if (probe.state === 'unused') return stored.contractId;
+    }
+
+    if (stored.isUserDeployed) {
+      clearActiveEscrowId(wallet.address);
+    }
+
+    setDeployStep('fetching-wasm');
+    const deployed = await deployEscrowContract({
+      signTransaction: wallet.signTransaction,
+      sourceAddress: wallet.address,
+      onProgress: (step, contractId) => {
+        setDeployStep(step);
+        if (contractId) setDeployedContractId(contractId);
+      },
+    });
+
+    setActiveEscrowId(wallet.address, deployed.contractId);
+    setDeployedContractId(deployed.contractId);
+    return deployed.contractId;
+  };
+
+  const handleNewContract = async () => {
+    if (!wallet.connected) {
+      setToast({ message: 'Conecta tu wallet de Freighter para desplegar un contrato nuevo', type: 'error' });
+      return;
+    }
+    setGenerating(true);
+    setDeployStep('fetching-wasm');
+    try {
+      const contractId = await ensureFreshContract(true);
+      setGenerated(false);
+      setTxHash(null);
+      setToast({ message: `Contrato nuevo desplegado: ${contractId.slice(0, 8)}...${contractId.slice(-4)}`, type: 'success' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado';
+      setToast({ message: `No se pudo desplegar un contrato nuevo: ${msg}`, type: 'error' });
+    } finally {
+      setGenerating(false);
+      setDeployStep(null);
+    }
   };
 
   const handleGenerate = async () => {
@@ -107,6 +180,10 @@ export default function CrearEscrow() {
     setGenerating(true);
 
     try {
+      // The contract is single-use, so a new escrow needs a new instance.
+      // Deploying happens first so `create_escrow` never targets a spent contract.
+      const contractId = await ensureFreshContract(false);
+
       const result = await createEscrowOnChain(
         wallet.address,
         seller.address,
@@ -115,6 +192,7 @@ export default function CrearEscrow() {
         form.serviceTitle,
         wallet.signTransaction,
         USDC_TOKEN_ADDRESS,
+        contractId,
       );
 
       if (result.success && result.hash) {
@@ -129,6 +207,7 @@ export default function CrearEscrow() {
       setToast({ message: `Failed to create escrow: ${msg}`, type: 'error' });
     } finally {
       setGenerating(false);
+      setDeployStep(null);
     }
   };
 
@@ -148,11 +227,21 @@ export default function CrearEscrow() {
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0 self-start md:self-auto bg-surface-container-lowest p-2 rounded-xl shadow-sm">
-          <div className="px-3 py-1.5 rounded-lg bg-surface-container-low flex flex-col">
+          <button
+            type="button"
+            onClick={handleNewContract}
+            disabled={!wallet.connected || generating}
+            className="px-3 py-1.5 rounded-lg bg-surface-container text-primary text-xs font-semibold hover:bg-primary hover:text-on-primary transition-colors disabled:opacity-40 disabled:hover:bg-surface-container disabled:hover:text-primary flex items-center gap-1.5"
+            title="Cada escrow usa su propia instancia del contrato, porque el contrato solo admite un uso. Esto despliega una instancia nueva para tu wallet."
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            Nuevo escrow
+          </button>
+          <div className="px-3 py-1.5 rounded-lg bg-surface-container flex flex-col">
             <span className="text-xs text-secondary uppercase">Tiempo de creación</span>
             <span className="text-lg text-on-surface font-bold">&lt; 60 seg</span>
           </div>
-          <div className="px-3 py-1.5 rounded-lg bg-surface-container-low flex flex-col">
+          <div className="px-3 py-1.5 rounded-lg bg-surface-container flex flex-col">
             <span className="text-xs text-secondary uppercase">Costo de Bloqueo</span>
             <span className="text-lg text-tertiary font-bold">$0.0001</span>
           </div>
@@ -478,6 +567,44 @@ export default function CrearEscrow() {
               )}
             </div>
 
+            {/* Deploy progress + active contract identity */}
+            <div className="bg-surface-container-lowest border border-outline-variant/30 p-3.5 rounded-xl flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-secondary uppercase font-semibold">Contrato Soroban</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    isUserDeployed
+                      ? 'bg-primary-container text-on-primary'
+                      : 'bg-secondary-container text-on-secondary-container'
+                  }`}
+                >
+                  {isUserDeployed ? 'Instancia propia' : 'Instancia compartida (semilla)'}
+                </span>
+              </div>
+              <span className="font-code-md text-[11px] text-on-surface break-all select-all">
+                {activeContractId}
+              </span>
+              <p className="text-[11px] text-secondary leading-snug">
+                {isUserDeployed
+                  ? 'Instancia desplegada por tu wallet. El contrato solo admite un escrow por instancia, asi que un escrow nuevo necesita otra.'
+                  : 'Instancia semilla de Breadline, de un solo uso. Al crear tu escrow se despliega una instancia propia y esta direccion deja de usarse.'}
+              </p>
+
+              {deployStep && (
+                <div className="flex items-center gap-2 pt-1 text-xs text-primary font-semibold">
+                  <span className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin"></span>
+                  {DEPLOY_STEP_LABEL[deployStep]}
+                </div>
+              )}
+
+              {deployedContractId && !deployStep && (
+                <div className="flex items-start gap-2 pt-1 text-[11px] text-on-surface">
+                  <span className="font-semibold shrink-0">Contrato creado:</span>
+                  <span className="font-code-md break-all select-all">{deployedContractId}</span>
+                </div>
+              )}
+            </div>
+
             {/* Link Preview */}
             <div className="bg-surface-container-low p-3.5 rounded-xl flex flex-col gap-2">
               <span className="text-xs text-secondary uppercase font-semibold">
@@ -489,8 +616,8 @@ export default function CrearEscrow() {
                   {generated && txHash
                     ? txHash
                     : wallet.connected
-                      ? `breadline.fi/escrow/${ESCROW_CONTRACT_ID}?seller=${shareLinkSeller ? shareLinkSeller.slice(0, 8) : 'PENDIENTE'}`
-                      : `breadline.fi/escrow/${ESCROW_CONTRACT_ID}`}
+                      ? `breadline.fi/escrow/${activeContractId}?seller=${shareLinkSeller ? shareLinkSeller.slice(0, 8) : 'PENDIENTE'}`
+                      : `breadline.fi/escrow/${activeContractId}`}
                 </span>
                 <button
                   className={`px-3 py-1 rounded font-label-sm text-xs font-semibold transition-all flex items-center gap-1 shrink-0 ${copied ? 'bg-tertiary text-on-tertiary' : 'bg-surface-container text-primary hover:bg-primary hover:text-on-primary'}`}

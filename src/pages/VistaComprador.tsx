@@ -6,7 +6,8 @@ import {
   type OnChainEscrow,
   type OnChainEscrowState,
 } from '../lib/contract';
-import { ESCROW_CONTRACT_ID, truncateAddress } from '../lib/stellar';
+import { useActiveEscrowId } from '../lib/activeEscrow';
+import { truncateAddress } from '../lib/stellar';
 import { useStellarWallet } from '../hooks/useStellarWallet';
 
 // ─── Types ───
@@ -20,7 +21,6 @@ type FundStatus = 'idle' | 'loading' | 'success' | 'error';
 const t = {
   es: {
     guaranteeStrip: 'Proteccion de Comprador Activa',
-    contractId: `Contrato Soroban: ${truncateAddress(ESCROW_CONTRACT_ID, 6)}`,
     heroTitle: 'Deposito Protegido en Garantia',
     heroDescription:
       'Los fondos seran bloqueados en un contrato inteligente de Soroban hasta que confirmes la entrega satisfactoria del servicio.',
@@ -92,7 +92,6 @@ const t = {
   },
   en: {
     guaranteeStrip: 'Buyer Protection Active',
-    contractId: `Soroban Contract: ${truncateAddress(ESCROW_CONTRACT_ID, 6)}`,
     heroTitle: 'Protected Deposit in Escrow',
     heroDescription:
       'Funds will be locked in a Soroban smart contract until you confirm satisfactory delivery of the service.',
@@ -372,18 +371,24 @@ export default function VistaComprador() {
   const wallet = useStellarWallet();
   const content = t[lang];
 
+  // The contract this wallet is really operating on.
+  const activeContractId = useActiveEscrowId(wallet.address);
+  const activeContractLabel = lang === 'es'
+    ? `Contrato Soroban: ${truncateAddress(activeContractId, 6)}`
+    : `Soroban Contract: ${truncateAddress(activeContractId, 6)}`;
+
   // Fetch escrow on mount
   const loadEscrow = useCallback(async () => {
     setEscrowLoading(true);
     try {
-      const data = await fetchEscrow();
+      const data = await fetchEscrow(activeContractId);
       setEscrow(data);
     } catch {
       // Error handled by empty escrow state
     } finally {
       setEscrowLoading(false);
     }
-  }, []);
+  }, [activeContractId]);
 
   useEffect(() => {
     loadEscrow();
@@ -397,7 +402,7 @@ export default function VistaComprador() {
     setFundError(null);
 
     try {
-      const result = await fundEscrowOnChain(wallet.signTransaction);
+      const result = await fundEscrowOnChain(wallet.signTransaction, activeContractId);
       if (result.success) {
         setFundStatus('success');
         // Re-fetch escrow to update state
@@ -463,7 +468,7 @@ export default function VistaComprador() {
               </svg>
               <span className="font-label-sm">{content.guaranteeStrip}</span>
             </div>
-            <span className="font-code-md text-xs opacity-80 hidden sm:inline">{content.contractId}</span>
+            <span className="font-code-md text-xs opacity-80 hidden sm:inline">{activeContractLabel}</span>
           </div>
         </div>
 
@@ -507,7 +512,7 @@ export default function VistaComprador() {
             </svg>
             <span className="font-label-sm">{content.guaranteeStrip}</span>
           </div>
-          <span className="font-code-md text-xs opacity-80 hidden sm:inline">{content.contractId}</span>
+          <span className="font-code-md text-xs opacity-80 hidden sm:inline">{activeContractLabel}</span>
         </div>
       </div>
 
@@ -679,9 +684,9 @@ export default function VistaComprador() {
                         <p className="font-label-sm text-secondary mb-1">{content.depositAddress}</p>
                         <div className="flex items-center gap-2 bg-surface-container-lowest rounded-lg border border-surface-container px-4 py-3">
                           <span className="font-code-md text-sm text-on-surface break-all flex-1">
-                            {truncateAddress(ESCROW_CONTRACT_ID, 8)}
+                            {truncateAddress(activeContractId, 8)}
                           </span>
-                          <CopyButton text={ESCROW_CONTRACT_ID} label={content.copyAddress} />
+                          <CopyButton text={activeContractId} label={content.copyAddress} />
                         </div>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-tertiary">

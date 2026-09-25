@@ -10,7 +10,7 @@ export const NETWORK_PASSPHRASE = StellarSdk.Networks.TESTNET;
 
 // Deployed escrow contract on Testnet — breadline-v4 (real USDC custody + dispute dead-end fix + deadline guards)
 export const ESCROW_CONTRACT_ID =
-  import.meta.env.VITE_ESCROW_CONTRACT_ID || 'CB7I2GURQDV4Q7YAT2PZAG3ZNFQJ37GI6MWZ4P3W7SUCJZPSHP2G6L6J';
+  import.meta.env.VITE_ESCROW_CONTRACT_ID || 'CBY6UC4IMSIA6AGRNXOIPENIYNNOL2LJG4O5QLRLKNWACAEZ2DIUYAWL';
 
 export const CURRENCIES = ['USDC', 'USD'] as const;
 

@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { fetchEscrow, formatScAmount, ESCROW_CONTRACT_ID } from "../lib/contract";
+import { fetchEscrow, formatScAmount } from "../lib/contract";
 import type { OnChainEscrow } from "../lib/contract";
+import { useActiveEscrowId } from "../lib/activeEscrow";
+import { useStellarWallet } from "../hooks/useStellarWallet";
 import { truncateAddress, truncateHash } from "../lib/stellar";
 
 // ---------------------------------------------------------------------------
@@ -262,12 +264,17 @@ export default function Certificados() {
 
   const t = LABELS[lang];
 
+  // The certificate must attest the contract the escrow actually lives on,
+  // not the shared seed instance.
+  const wallet = useStellarWallet();
+  const activeContractId = useActiveEscrowId(wallet.address);
+
   useEffect(() => {
-    fetchEscrow()
+    fetchEscrow(activeContractId)
       .then(setEscrow)
       .catch(() => setEscrow(null))
       .finally(() => setLoading(false));
-  }, []);
+  }, [activeContractId]);
 
   const zoomIn = useCallback(() => setZoom((z) => Math.min(z + 10, 150)), []);
   const zoomOut = useCallback(() => setZoom((z) => Math.max(z - 10, 60)), []);
@@ -285,7 +292,7 @@ export default function Certificados() {
     }
     setToast(t.hashVerifying);
     try {
-      const certContent = `${ESCROW_CONTRACT_ID}|${escrow.buyer}|${escrow.seller}|${escrow.amount.toString()}|${escrow.service_description}|${escrow.created_at.toString()}|${escrow.deadline.toString()}|${escrow.state}`;
+      const certContent = `${activeContractId}|${escrow.buyer}|${escrow.seller}|${escrow.amount.toString()}|${escrow.service_description}|${escrow.created_at.toString()}|${escrow.deadline.toString()}|${escrow.state}`;
       const data = new TextEncoder().encode(certContent);
       const hashBuffer = await crypto.subtle.digest("SHA-256", data);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -299,7 +306,7 @@ export default function Certificados() {
       setToast(lang === "ES" ? "Error al calcular el hash" : "Hash computation error");
       setTimeout(() => setToast(null), 2500);
     }
-  }, [t, escrow, lang]);
+  }, [t, escrow, lang, activeContractId]);
 
   const toggleLang = useCallback(() => {
     setLang((prev) => (prev === "ES" ? "EN" : "ES"));
@@ -418,15 +425,15 @@ export default function Certificados() {
             </div>
             <div className="text-right shrink-0">
               <p className="text-[10px] uppercase tracking-widest text-gray-500">{t.folio}</p>
-              <p className="font-mono text-sm font-bold text-[#1e3a5f]">{truncateHash(ESCROW_CONTRACT_ID, 8)}</p>
+              <p className="font-mono text-sm font-bold text-[#1e3a5f]">{truncateHash(activeContractId, 8)}</p>
               <div className="flex justify-end mt-1.5">
-                <Barcode value={ESCROW_CONTRACT_ID.replace(/[^A-Z0-9]/gi, "").slice(0, 20)} />
+                <Barcode value={activeContractId.replace(/[^A-Z0-9]/gi, "").slice(0, 20)} />
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2 text-[10px] text-gray-500 uppercase tracking-widest">
             <span>{t.ledgerSeq}:</span>
-            <span className="font-mono font-semibold text-gray-700">{ESCROW_CONTRACT_ID}</span>
+            <span className="font-mono font-semibold text-gray-700">{activeContractId}</span>
           </div>
         </header>
 
@@ -454,7 +461,7 @@ export default function Certificados() {
         <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-xs">
           <div>
             <span className="text-gray-500">{t.escrow}</span>{" "}
-            <span className="font-mono font-semibold">{truncateHash(ESCROW_CONTRACT_ID, 12)}</span>
+            <span className="font-mono font-semibold">{truncateHash(activeContractId, 12)}</span>
           </div>
           <div>
             <span className="text-gray-500">{t.resolution}:</span>{" "}
@@ -515,7 +522,7 @@ export default function Certificados() {
         <div className="space-y-3 text-xs">
           <div>
             <span className="text-gray-500">{t.transactionHash}:</span>
-            <p className="mt-0.5 font-mono text-[10px] break-all text-gray-800">{ESCROW_CONTRACT_ID}</p>
+            <p className="mt-0.5 font-mono text-[10px] break-all text-gray-800">{activeContractId}</p>
           </div>
           <p className="text-[10px] leading-relaxed text-gray-500 border-l-2 border-amber-300 pl-2">
             {t.hashNote}
@@ -558,7 +565,7 @@ export default function Certificados() {
         {/* Footer */}
         <footer className="mt-10 pt-4 border-t border-gray-300 flex items-center justify-between text-[10px] text-gray-400">
           <span>{t.footerPage} 1 {t.of} 2</span>
-          <span className="font-mono">{truncateHash(ESCROW_CONTRACT_ID, 12)}</span>
+          <span className="font-mono">{truncateHash(activeContractId, 12)}</span>
           <span>Breadline {new Date().getFullYear()}</span>
         </footer>
       </div>

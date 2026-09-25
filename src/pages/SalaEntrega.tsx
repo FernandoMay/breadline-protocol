@@ -9,7 +9,7 @@ import {
   type OnChainEscrow,
   type OnChainEscrowState,
 } from '../lib/contract';
-import { ESCROW_CONTRACT_ID } from '../lib/stellar';
+import { useActiveEscrowId } from '../lib/activeEscrow';
 import { useStellarWallet } from '../hooks/useStellarWallet';
 
 // ─── Derived helpers ───
@@ -110,6 +110,9 @@ export default function SalaEntrega() {
   const wallet = useStellarWallet();
   const { connected, address, signTransaction } = wallet;
 
+  // The contract this wallet is really operating on.
+  const activeContractId = useActiveEscrowId(address);
+
   const [escrow, setEscrow] = useState<OnChainEscrow | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -124,14 +127,14 @@ export default function SalaEntrega() {
     setLoading(true);
     setError('');
     try {
-      const data = await fetchEscrow();
+      const data = await fetchEscrow(activeContractId);
       setEscrow(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al cargar el escrow');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeContractId]);
 
   useEffect(() => {
     loadEscrow();
@@ -142,12 +145,12 @@ export default function SalaEntrega() {
   const refreshAfterAction = useCallback(async () => {
     setActionLoading('refresh');
     try {
-      const data = await fetchEscrow();
+      const data = await fetchEscrow(activeContractId);
       setEscrow(data);
     } finally {
       setActionLoading(null);
     }
-  }, []);
+  }, [activeContractId]);
 
   // ─── Actions ───
 
@@ -155,7 +158,7 @@ export default function SalaEntrega() {
     if (!signTransaction) return;
     setActionLoading('release');
     try {
-      const result = await releaseFundsOnChain(signTransaction);
+      const result = await releaseFundsOnChain(signTransaction, activeContractId);
       if (result.success) {
         setShowReleaseModal(false);
         await refreshAfterAction();
@@ -167,13 +170,13 @@ export default function SalaEntrega() {
     } finally {
       setActionLoading(null);
     }
-  }, [signTransaction, refreshAfterAction]);
+  }, [signTransaction, activeContractId, refreshAfterAction]);
 
   const handleRefund = useCallback(async () => {
     if (!signTransaction || !address) return;
     setActionLoading('refund');
     try {
-      const result = await refundEscrowOnChain(address, signTransaction);
+      const result = await refundEscrowOnChain(address, signTransaction, activeContractId);
       if (result.success) {
         await refreshAfterAction();
       } else {
@@ -184,13 +187,13 @@ export default function SalaEntrega() {
     } finally {
       setActionLoading(null);
     }
-  }, [signTransaction, address, refreshAfterAction]);
+  }, [signTransaction, address, activeContractId, refreshAfterAction]);
 
   const handleDispute = useCallback(async () => {
     if (!signTransaction || !address) return;
     setActionLoading('dispute');
     try {
-      const result = await raiseDisputeOnChain(address, signTransaction);
+      const result = await raiseDisputeOnChain(address, signTransaction, activeContractId);
       if (result.success) {
         await refreshAfterAction();
       } else {
@@ -201,13 +204,13 @@ export default function SalaEntrega() {
     } finally {
       setActionLoading(null);
     }
-  }, [signTransaction, address, refreshAfterAction]);
+  }, [signTransaction, address, activeContractId, refreshAfterAction]);
 
   const handleAutoRefund = useCallback(async () => {
     if (!signTransaction) return;
     setActionLoading('auto-refund');
     try {
-      const result = await autoRefundIfExpiredOnChain(signTransaction);
+      const result = await autoRefundIfExpiredOnChain(signTransaction, activeContractId);
       if (result.success) {
         await refreshAfterAction();
       } else {
@@ -218,7 +221,7 @@ export default function SalaEntrega() {
     } finally {
       setActionLoading(null);
     }
-  }, [signTransaction, refreshAfterAction]);
+  }, [signTransaction, activeContractId, refreshAfterAction]);
 
   // ─── Chat ───
 
@@ -261,7 +264,7 @@ export default function SalaEntrega() {
                     <span className={`w-2 h-2 rounded-full animate-pulse ${stateDotColor(escrow.state)}`}></span>
                     {stateLabel(escrow.state)}
                   </span>
-                  <span className="font-code-md text-xs text-secondary bg-surface-container-low px-2 py-0.5 rounded">ID: {shortAddress(ESCROW_CONTRACT_ID)}</span>
+                  <span className="font-code-md text-xs text-secondary bg-surface-container-low px-2 py-0.5 rounded">ID: {shortAddress(activeContractId)}</span>
                 </>
               ) : (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary/15 text-secondary text-xs font-semibold">
@@ -605,7 +608,7 @@ export default function SalaEntrega() {
                 <div className="p-3 bg-surface-container-low rounded-lg flex flex-col gap-1.5">
                   <span className="text-[10px] text-secondary uppercase font-semibold">Direccion del Contrato</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-code-md text-[11px] text-on-surface font-medium truncate select-all flex-1">{ESCROW_CONTRACT_ID}</span>
+                    <span className="font-code-md text-[11px] text-on-surface font-medium truncate select-all flex-1">{activeContractId}</span>
                     <button className="shrink-0 p-1 rounded text-secondary hover:text-primary transition-colors">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                     </button>
@@ -764,7 +767,7 @@ export default function SalaEntrega() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-secondary">Contrato:</span>
-                <span className="font-code-md text-secondary text-xs">{shortAddress(ESCROW_CONTRACT_ID)}</span>
+                <span className="font-code-md text-secondary text-xs">{shortAddress(activeContractId)}</span>
               </div>
             </div>
 
