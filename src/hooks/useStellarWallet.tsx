@@ -37,25 +37,78 @@ interface WalletBalance {
   issuer?: string;
 }
 
+/**
+ * Globals Freighter has used across builds. `freighterApi` is the current
+ * injection point; the others are older/alternate names still seen in the wild.
+ */
+const FREIGHTER_GLOBALS = ['freighterApi', 'freighter', 'StellarFreighterApi'] as const;
+
+/** Event Freighter dispatches once its content script has finished injecting. */
+const FREIGHTER_READY_EVENT = 'freighter:ready';
+
+function isFreighterLike(value: unknown): value is FreighterApi {
+  if (!value || typeof value !== 'object') return false;
+  const obj = value as Record<string, unknown>;
+  return (
+    typeof obj.getAddress === 'function' &&
+    typeof obj.signTransaction === 'function' &&
+    typeof obj.isConnected === 'function'
+  );
+}
+
+/** One-shot read of the already-injected global, if any. */
 function getFreighter(): FreighterApi | null {
   if (typeof window === 'undefined') return null;
   const w = window as unknown as Record<string, unknown>;
-  // Freighter injects as window.freighterApi (not window.freighter)
-  const f = w.freighterApi;
-  if (f && typeof f === 'object') {
-    const obj = f as Record<string, unknown>;
-    if (
-      typeof obj.getAddress === 'function' &&
-      typeof obj.signTransaction === 'function' &&
-      typeof obj.isConnected === 'function'
-    ) {
-      return f as unknown as FreighterApi;
-    }
+  for (const name of FREIGHTER_GLOBALS) {
+    const candidate = w[name];
+    if (isFreighterLike(candidate)) return candidate;
   }
   return null;
 }
 
-const ERROR_NOT_INSTALLED = 'Extensión Freighter no detectada. Instalala y recargá la página.';
+/**
+ * Freighter injects its content script asynchronously, so a single synchronous
+ * read on mount reports "not installed" whenever React happens to boot first.
+ * This waits for the injection instead: it checks immediately, subscribes to the
+ * ready event, and polls as a fallback for builds that never fire it.
+ *
+ * Returns null only after the full budget elapses, so a slow injection is no
+ * longer misreported as a missing extension.
+ */
+function waitForFreighter(timeoutMs = 10000): Promise<FreighterApi | null> {
+  const immediate = getFreighter();
+  if (immediate) return Promise.resolve(immediate);
+  if (typeof window === 'undefined') return Promise.resolve(null);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (api: FreighterApi | null) => {
+      if (settled) return;
+      settled = true;
+      window.removeEventListener(FREIGHTER_READY_EVENT, onReady);
+      window.clearInterval(poll);
+      clearTimeout(timer);
+      resolve(api);
+    };
+
+    function onReady() {
+      finish(getFreighter());
+    }
+
+    const poll = window.setInterval(() => {
+      const api = getFreighter();
+      if (api) finish(api);
+    }, 200);
+
+    const timer = window.setTimeout(() => finish(getFreighter()), timeoutMs);
+
+    window.addEventListener(FREIGHTER_READY_EVENT, onReady);
+  });
+}
+
+const ERROR_NOT_INSTALLED =
+  'No se encontró Freighter tras 10 segundos. Verificá que la extensión esté instalada y habilitada en este navegador, y que no esté bloqueada por un bloqueador de anuncios o Shields.';
 const ERROR_LOCKED =
   'Freighter bloqueado o el sitio no fue aprobado. Desbloqueá la extensión y aprobá la conexión.';
 const ERROR_REJECTED = 'Rechazaste la conexión en Freighter.';
@@ -262,8 +315,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   );
 
   const connect = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
-    const freighter = getFreighter();
+    setLoading(true);
+    // Wait for the asynchronous injection instead of failing on a single early
+    // miss, which is what made an installed extension look absent.
+    const freighter = await waitForFreighter();
     if (!freighter) {
+      setLoading(false);
       setError(ERROR_NOT_INSTALLED);
       return { success: false, error: ERROR_NOT_INSTALLED };
     }
@@ -362,7 +419,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
-    const freighter = getFreighter();
+    const freighter = await waitForFreighter();
     if (!freighter) {
       setError(ERROR_NOT_INSTALLED);
       return null;
@@ -400,13 +457,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Single auto-connect for the whole app: restore a previous session silently.
   // Any failure here is expected (locked extension, not approved yet), so it must
   // not populate `error` — the user has not attempted an action yet.
+  //
+  // It waits for the injection rather than reading once: Freighter's content
+  // script can land after React mounts, and a single early read made a fully
+  // installed extension look absent for the rest of the session.
   useEffect(() => {
-    const freighter = getFreighter();
-    if (!freighter) return;
-
     let cancelled = false;
 
     void (async () => {
+      const freighter = await waitForFreighter();
+      if (cancelled || !freighter) return;
+
       const result = await resolveAddress(freighter);
       if (cancelled || !result.ok) return;
 
