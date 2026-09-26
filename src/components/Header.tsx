@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { useStellarWallet } from '../hooks/useStellarWallet';
 import type { StellarWalletValue } from '../hooks/useStellarWallet';
@@ -140,10 +141,10 @@ function ConnectDialog({ wallet, onClose }: { wallet: StellarWalletValue; onClos
     if (result.success) onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-4 overflow-y-auto">
       <div className="absolute inset-0 bg-inverse-surface/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-xl p-6 flex flex-col gap-4">
+      <div className="relative w-full max-w-md my-auto bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-xl p-6 flex flex-col gap-4 max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <div className="flex items-center justify-between">
           <h2 className="text-headline-sm text-headline-sm font-bold text-on-surface">Conectar wallet</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg text-secondary hover:bg-surface-container-low">
@@ -205,7 +206,8 @@ function ConnectDialog({ wallet, onClose }: { wallet: StellarWalletValue; onClos
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
