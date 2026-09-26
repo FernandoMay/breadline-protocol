@@ -43,6 +43,13 @@ interface WalletBalance {
  */
 const FREIGHTER_GLOBALS = ['freighterApi', 'freighter', 'StellarFreighterApi'] as const;
 
+/**
+ * Globals that indicate a Stellar wallet is present in the page even when it is
+ * not a signable Freighter API. `window.stellar` is how Freighter Mobile's
+ * in-app browser identifies itself, so its presence changes the diagnosis.
+ */
+const STELLAR_PRESENCE_GLOBALS = ['stellar'] as const;
+
 /** Event Freighter dispatches once its content script has finished injecting. */
 const FREIGHTER_READY_EVENT = 'freighter:ready';
 
@@ -110,7 +117,7 @@ function waitForFreighter(timeoutMs = 10000): Promise<{ api: FreighterApi | null
 }
 
 const ERROR_NOT_INSTALLED =
-  'No se encontró Freighter tras 10 segundos. Verificá que la extensión esté instalada y habilitada en este navegador, y que no esté bloqueada por un bloqueador de anuncios o Shields.';
+  'Freighter no está disponible en esta página. Otras extensiones sí detectan, así que el problema es Freighter: verificá en chrome://extensions que esté instalada y activada EN ESTE PERFIL de Chrome, y que no esté bloqueada para este sitio (icono del candado junto a la URL). Después recargá con Ctrl+Shift+R.';
 
 /**
  * What the page can actually observe about the browser and the extension.
@@ -135,6 +142,11 @@ function collectDiagnostics(readyEventSeen: boolean, notes: string[]): WalletDia
   const w = typeof window === 'undefined' ? ({} as Record<string, unknown>) : (window as unknown as Record<string, unknown>);
   const globalsFound = FREIGHTER_GLOBALS.filter((name) => typeof w[name] !== 'undefined');
   const otherWallets: string[] = [];
+  for (const name of STELLAR_PRESENCE_GLOBALS) {
+    if (typeof w[name] === 'undefined') continue;
+    const platform = (w[name] as { platform?: unknown } | undefined)?.platform;
+    otherWallets.push(platform ? `stellar (Freighter Mobile: ${String(platform)})` : 'stellar');
+  }
   if (typeof w.ethereum !== 'undefined') otherWallets.push('EIP-1193 (ethereum/metamask)');
   if (typeof w.solana !== 'undefined') otherWallets.push('solana');
   if (typeof w.phantom !== 'undefined' || typeof w.solflare !== 'undefined') otherWallets.push('phantom/solflare');
