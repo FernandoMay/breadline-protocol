@@ -122,20 +122,99 @@ export function FundingBanner({ wallet, onFunded, onFailed }: FundingBannerProps
   );
 }
 
+/**
+ * Connect dialog offering the two real options: the Freighter extension when it
+ * is actually present, and a local testnet key which needs no installation at
+ * all. The second path exists so the app is usable on any machine during a demo.
+ */
+function ConnectDialog({ wallet, onClose }: { wallet: StellarWalletValue; onClose: () => void }) {
+  const [secret, setSecret] = useState('');
+  const [busy, setBusy] = useState(false);
+  const extensionPresent = (wallet.diagnostics?.globalsFound.length ?? 0) > 0;
+
+  const useLocalKey = async () => {
+    setBusy(true);
+    const result = await wallet.connectWithSecret(secret);
+    setSecret('');
+    setBusy(false);
+    if (result.success) onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4">
+      <div className="absolute inset-0 bg-inverse-surface/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-xl p-6 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-headline-sm text-headline-sm font-bold text-on-surface">Conectar wallet</h2>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-secondary hover:bg-surface-container-low">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <button
+          onClick={() => {
+            void wallet.connect().then((r) => {
+              if (r.success) onClose();
+            });
+          }}
+          disabled={busy || wallet.loading}
+          className="w-full p-4 rounded-xl bg-primary/5 border border-primary/25 text-left hover:bg-primary/10 transition-colors flex items-center gap-3 disabled:opacity-50"
+        >
+          <span className="material-symbols-outlined text-2xl text-primary">extension</span>
+          <span className="flex flex-col min-w-0">
+            <span className="font-semibold text-on-surface text-sm">Extensión Freighter</span>
+            <span className="text-xs text-secondary">
+              {extensionPresent
+                ? 'Detectada en este navegador'
+                : 'No detectada — usá la opción de abajo'}
+            </span>
+          </span>
+        </button>
+
+        <div className="flex items-center gap-2 text-label-sm text-label-sm text-secondary uppercase">
+          <span className="h-px flex-1 bg-outline-variant/30" />
+          o sin instalar nada
+          <span className="h-px flex-1 bg-outline-variant/30" />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-label-md text-label-md text-on-surface-variant" htmlFor="testnet-secret">
+            Clave secreta de una cuenta de Stellar <strong className="text-on-surface">Testnet</strong>
+          </label>
+          <input
+            id="testnet-secret"
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            value={secret}
+            onChange={(e) => setSecret(e.target.value)}
+            placeholder="S..."
+            className="w-full px-3 py-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/40 font-code-md text-code-md text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <p className="text-label-sm text-label-sm text-error leading-snug">
+            Solo para TESTNET. Nunca pegues acá la clave de una cuenta con fondos reales: la
+            aplicación firmaría en el navegador con ella.
+          </p>
+          <button
+            onClick={() => void useLocalKey()}
+            disabled={!secret.trim() || busy || wallet.loading}
+            className="w-full py-2.5 rounded-lg bg-primary text-on-primary font-label-lg text-label-lg hover:bg-primary-container transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined text-lg">key</span>
+            {busy ? 'Conectando…' : 'Conectar con clave de testnet'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Header() {
   const location = useLocation();
   const wallet = useStellarWallet();
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-
-  const handleConnect = async () => {
-    const result = await wallet.connect();
-    if (!result.success && result.error) {
-      setToast({ message: result.error, type: 'error' });
-    } else {
-      setToast({ message: 'Wallet connected successfully', type: 'success' });
-    }
-  };
+  const [connectOpen, setConnectOpen] = useState(false);
 
   const handleDisconnect = () => {
     wallet.disconnect();
@@ -231,7 +310,7 @@ export default function Header() {
               </>
             ) : (
               <button
-                onClick={handleConnect}
+                onClick={() => setConnectOpen(true)}
                 disabled={wallet.loading}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary hover:bg-primary-container text-on-primary text-sm font-semibold shadow-sm transition-all cursor-pointer disabled:opacity-50"
               >
@@ -261,6 +340,9 @@ export default function Header() {
           }
           onFailed={(message) => setToast({ message, type: 'error' })}
         />
+      )}
+      {connectOpen && !wallet.connected && (
+        <ConnectDialog wallet={wallet} onClose={() => setConnectOpen(false)} />
       )}
       {wallet.diagnostics && !wallet.connected && (
         <div className="border-t border-error/30 bg-error/5">

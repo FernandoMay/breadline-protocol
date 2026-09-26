@@ -117,7 +117,35 @@ function waitForFreighter(timeoutMs = 10000): Promise<{ api: FreighterApi | null
 }
 
 const ERROR_NOT_INSTALLED =
-  'Freighter no está disponible en esta página. Otras extensiones sí detectan, así que el problema es Freighter: verificá en chrome://extensions que esté instalada y activada EN ESTE PERFIL de Chrome, y que no esté bloqueada para este sitio (icono del candado junto a la URL). Después recargá con Ctrl+Shift+R.';
+  'No se detectó ninguna wallet. Podés instalar la extensión Freighter o usar una clave de testnet — para una demo no hace falta instalar nada.';
+
+/**
+ * A local signer for Stellar **testnet** accounts, so the app stays usable on a
+ * machine with no wallet extension at all (a judge's laptop, a demo machine).
+ *
+ * The user pastes an `S...` secret seed, which is never persisted, never logged
+ * and never leaves the browser. This is only acceptable because the app is
+ * testnet-only: a mainnet secret must never be typed here, and the UI says so
+ * next to the field.
+ */
+interface LocalSigner {
+  keypair: StellarSdk.Keypair;
+  address: string;
+}
+
+function parseTestnetSecret(secret: string): LocalSigner {
+  const trimmed = secret.trim().replace(/\s+/g, '');
+  if (!trimmed.startsWith('S')) {
+    throw new Error('Una clave secreta de Stellar empieza con "S". Revisá lo que pegaste.');
+  }
+  let keypair: StellarSdk.Keypair;
+  try {
+    keypair = StellarSdk.Keypair.fromSecret(trimmed);
+  } catch {
+    throw new Error('Esa clave no es válida. Revisá que la hayas copiado completa.');
+  }
+  return { keypair, address: keypair.publicKey() };
+}
 
 /**
  * What the page can actually observe about the browser and the extension.
@@ -287,6 +315,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const networkMismatchRef = useRef('');
   /** Observable facts about the browser, filled in whenever detection runs. */
   const [diagnostics, setDiagnostics] = useState<WalletDiagnostics | null>(null);
+  /**
+   * Active signing backend. `'freighter'` delegates to the extension; `'local'`
+   * signs in the browser with a testnet key the user pasted. Held in a ref
+   * because it is read during signing and must not trigger re-renders.
+   */
+  const signerRef = useRef<{ kind: 'freighter'; api: FreighterApi } | LocalSigner | null>(null);
 
   /**
    * Read the account from Horizon and classify its funding situation.
@@ -407,6 +441,38 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchBalances, resolveAddress]);
 
+  /**
+   * Connect with a testnet secret key, signing locally in the browser.
+   * This is the path that works with no wallet extension installed.
+   */
+  const connectWithSecret = useCallback(
+    async (secret: string): Promise<{ success: boolean; error?: string }> => {
+      setLoading(true);
+      setError('');
+      let local: LocalSigner;
+      try {
+        local = parseTestnetSecret(secret);
+      } catch (err) {
+        setLoading(false);
+        const message = err instanceof Error ? err.message : 'Clave inválida.';
+        setError(message);
+        return { success: false, error: message };
+      }
+
+      // A testnet key can only ever be used against testnet, so this is safe by
+      // construction: the app refuses any other network.
+      signerRef.current = local;
+      networkMismatchRef.current = '';
+      setAddress(local.address);
+      setConnected(true);
+      setNetwork(REQUIRED_NETWORK);
+      await fetchBalances(local.address);
+      setLoading(false);
+      return { success: true };
+    },
+    [fetchBalances]
+  );
+
   const disconnect = useCallback(() => {
     setConnected(false);
     setAddress('');
@@ -417,6 +483,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setFundingError('');
     setFundingLoading(false);
     networkMismatchRef.current = '';
+    // Drop the pasted key so it cannot survive the session.
+    signerRef.current = null;
   }, []);
 
   /**
@@ -479,6 +547,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       const message = networkMismatchMessage(mismatch);
       setError(message);
       return null;
+    }
+
+    // A locally held testnet key signs here, with no extension involved.
+    const active = signerRef.current;
+    if (active && 'keypair' in active) {
+      setLoading(true);
+      try {
+        const parsed = StellarSdk.TransactionBuilder.fromXDR(xdr, StellarSdk.Networks.TESTNET);
+        // SDK 17: sign() mutates the transaction in place and returns void.
+        parsed.sign(active.keypair);
+        return parsed.toXDR();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'No se pudo firmar la transacción.';
+        setError(message);
+        return null;
+      } finally {
+        setLoading(false);
+      }
     }
 
     const { api: freighter, readyEventSeen } = await waitForFreighter();
@@ -577,6 +663,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       fundingError,
       fundTestnetXlm,
       diagnostics,
+      connectWithSecret,
     }),
     [
       connected,
@@ -623,6 +710,8 @@ export interface StellarWalletValue {
   fundTestnetXlm: () => Promise<{ success: boolean; error?: string }>;
   /** Observable browser/injection facts, shown when wallet detection fails. */
   diagnostics: WalletDiagnostics | null;
+  /** Connect a testnet account with a pasted secret key; needs no extension. */
+  connectWithSecret: (secret: string) => Promise<{ success: boolean; error?: string }>;
 }
 
 const StellarWalletContext = createContext<StellarWalletValue | null>(null);
