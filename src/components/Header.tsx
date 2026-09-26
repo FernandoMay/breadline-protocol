@@ -132,7 +132,7 @@ function ConnectDialog({ wallet, onClose }: { wallet: StellarWalletValue; onClos
   const [busy, setBusy] = useState(false);
   const extensionPresent = (wallet.diagnostics?.globalsFound.length ?? 0) > 0;
 
-  const useLocalKey = async () => {
+  const connectWithLocalKey = async () => {
     setBusy(true);
     const result = await wallet.connectWithSecret(secret);
     setSecret('');
@@ -196,7 +196,7 @@ function ConnectDialog({ wallet, onClose }: { wallet: StellarWalletValue; onClos
             aplicación firmaría en el navegador con ella.
           </p>
           <button
-            onClick={() => void useLocalKey()}
+            onClick={() => void connectWithLocalKey()}
             disabled={!secret.trim() || busy || wallet.loading}
             className="w-full py-2.5 rounded-lg bg-primary text-on-primary font-label-lg text-label-lg hover:bg-primary-container transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
