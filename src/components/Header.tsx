@@ -271,7 +271,7 @@ export default function Header() {
             <svg className="w-4 h-4 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
             <div className="flex flex-col text-left leading-none">
               <span className="font-code-md text-[11px] text-on-surface font-semibold">&lt;3.2s finality</span>
-              <span className="font-code-md text-[10px] text-secondary">0.00001 XLM fee</span>
+              <span className="font-code-md text-[10px] text-secondary">mediana testnet</span>
             </div>
           </div>
 
@@ -345,44 +345,45 @@ export default function Header() {
         <ConnectDialog wallet={wallet} onClose={() => setConnectOpen(false)} />
       )}
       {wallet.diagnostics && !wallet.connected && (
-        <div className="border-t border-error/30 bg-error/5">
-          <div className="w-full max-w-[1440px] mx-auto px-4 md:px-8 py-3 flex flex-col gap-2">
-            <p className="text-label-md text-label-md text-error font-semibold">
-              Diagnóstico de conexión a la wallet
+        <div className="border-t border-outline-variant/30 bg-surface-container-low">
+          <div className="w-full max-w-[1440px] mx-auto px-4 md:px-8 py-3 flex flex-col gap-1.5">
+            <p className="text-label-md text-label-md text-on-surface font-semibold">
+              Extensión Freighter no disponible en este navegador
             </p>
-            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-label-sm text-label-sm text-on-surface-variant">
+            <p className="text-label-sm text-label-sm text-on-surface-variant">
+              No hace falta instalar nada: usá <strong>Conectar Wallet → clave de testnet</strong> para
+              operar igual.
+            </p>
+            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-1 text-label-sm text-label-sm text-secondary">
               <div className="flex gap-1.5">
-                <dt className="text-secondary">Globals de Freighter:</dt>
-                <dd className="font-code-md text-on-surface">
+                <dt>Globals de Freighter:</dt>
+                <dd className="font-code-md text-on-surface-variant">
                   {wallet.diagnostics.globalsFound.length > 0
                     ? wallet.diagnostics.globalsFound.join(', ')
                     : 'ninguna'}
                 </dd>
               </div>
               <div className="flex gap-1.5">
-                <dt className="text-secondary">Evento freighter:ready:</dt>
-                <dd className="font-code-md text-on-surface">
+                <dt>Evento freighter:ready:</dt>
+                <dd className="font-code-md text-on-surface-variant">
                   {wallet.diagnostics.readyEventSeen ? 'sí' : 'no'}
                 </dd>
               </div>
               <div className="flex gap-1.5">
-                <dt className="text-secondary">Contexto seguro (https):</dt>
-                <dd className="font-code-md text-on-surface">
+                <dt>Contexto seguro (https):</dt>
+                <dd className="font-code-md text-on-surface-variant">
                   {wallet.diagnostics.secureContext ? 'sí' : 'NO'}
                 </dd>
               </div>
               <div className="flex gap-1.5">
-                <dt className="text-secondary">Otras wallets detectadas:</dt>
-                <dd className="font-code-md text-on-surface">
+                <dt>Otras wallets detectadas:</dt>
+                <dd className="font-code-md text-on-surface-variant">
                   {wallet.diagnostics.otherWallets.length > 0
                     ? wallet.diagnostics.otherWallets.join(', ')
                     : 'ninguna'}
                 </dd>
               </div>
             </dl>
-            <p className="text-label-sm text-label-sm text-secondary break-all">
-              {wallet.diagnostics.userAgent}
-            </p>
           </div>
         </div>
       )}

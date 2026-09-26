@@ -109,10 +109,10 @@ export default function Dashboard() {
               Conectá tu wallet para comenzar
             </h1>
             <p className="text-sm text-secondary max-w-md">
-              Conectá tu wallet Freighter para ver tus escrows, balances y operaciones en la red Stellar.
+              Conectá una wallet de testnet para ver tus escrows, balances y operaciones en la red Stellar. Podés usar la extensión Freighter o una clave de testnet, sin instalar nada.
             </p>
             <button
-              onClick={wallet.connect}
+              onClick={() => void wallet.connect()}
               disabled={wallet.loading}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary-container text-on-primary text-sm font-semibold hover:bg-primary transition-all shadow-md disabled:opacity-50"
             >
@@ -385,12 +385,12 @@ export default function Dashboard() {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
-                  <span className="text-lg text-on-surface font-semibold">Auditoría Criptográfica</span>
+                  <span className="text-lg text-on-surface font-semibold">Custodia en el Contrato</span>
                 </div>
                 <span className="font-code-md text-[11px] px-2 py-0.5 rounded bg-surface-container-low text-secondary">Soroban Testnet</span>
               </div>
               <p className="text-xs text-secondary mb-4">
-                Cada depósito de escrow genera una cuenta inteligente sin custodia (Trustless Work) asegurada por el consenso de validadores de Stellar.
+                Cada depósito de escrow transfiere USDC al contrato inteligente sin custodia (Trustless Work), y los fondos solo salen con la firma de la contraparte o al vencer el plazo.
               </p>
               <div className="bg-surface-container-low rounded-lg p-3.5 flex items-center justify-between">
                 <div className="flex flex-col">

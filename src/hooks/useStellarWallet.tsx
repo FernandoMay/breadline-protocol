@@ -616,17 +616,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     void (async () => {
-      const { api: freighter, readyEventSeen } = await waitForFreighter();
+      const { api: freighter } = await waitForFreighter();
       if (!freighter) {
-        // Record what the page saw so the UI can explain a failed detection.
-        setDiagnostics(
-          collectDiagnostics(readyEventSeen, [
-            'Auto-conexión: Freighter no apareció dentro del presupuesto de espera.',
-          ]),
-        );
+        // Silent: the user has not asked to connect yet, and a missing extension
+        // is not a failure now that a no-install path exists. Reporting it here
+        // made the app look broken on every page load.
         return;
       }
-      setDiagnostics(collectDiagnostics(readyEventSeen, []));
+      setDiagnostics(collectDiagnostics(false, []));
       if (cancelled) return;
 
       const result = await resolveAddress(freighter);
