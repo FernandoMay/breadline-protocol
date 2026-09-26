@@ -120,11 +120,46 @@ const ERROR_NOT_INSTALLED =
   'No se detectó ninguna wallet. Podés instalar la extensión Freighter o usar una clave de testnet — para una demo no hace falta instalar nada.';
 
 /**
+ * The pasted testnet key is kept in `sessionStorage` so a page refresh or a
+ * direct URL entry does not drop the session mid-demo. It is deliberately not
+ * `localStorage`: the value must die with the tab. Testnet only, never a
+ * mainnet secret.
+ */
+const SESSION_SECRET_KEY = 'breadline.testnetSecret';
+
+function readSessionSecret(): LocalSigner | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(SESSION_SECRET_KEY);
+    if (!raw) return null;
+    return parseTestnetSecret(raw);
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionSecret(secret: string): void {
+  try {
+    window.sessionStorage.setItem(SESSION_SECRET_KEY, secret);
+  } catch {
+    /* storage unavailable (private mode): the session simply will not survive a refresh */
+  }
+}
+
+function clearSessionSecret(): void {
+  try {
+    window.sessionStorage.removeItem(SESSION_SECRET_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+}
+
+/**
  * A local signer for Stellar **testnet** accounts, so the app stays usable on a
  * machine with no wallet extension at all (a judge's laptop, a demo machine).
  *
- * The user pastes an `S...` secret seed, which is never persisted, never logged
- * and never leaves the browser. This is only acceptable because the app is
+ * The user pastes an `S...` secret seed, which never leaves the browser and is
+ * dropped when the tab closes. This is only acceptable because the app is
  * testnet-only: a mainnet secret must never be typed here, and the UI says so
  * next to the field.
  */
@@ -462,6 +497,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       // A testnet key can only ever be used against testnet, so this is safe by
       // construction: the app refuses any other network.
       signerRef.current = local;
+      writeSessionSecret(secret);
       networkMismatchRef.current = '';
       setAddress(local.address);
       setConnected(true);
@@ -485,6 +521,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     networkMismatchRef.current = '';
     // Drop the pasted key so it cannot survive the session.
     signerRef.current = null;
+    clearSessionSecret();
   }, []);
 
   /**
@@ -616,6 +653,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     void (async () => {
+      // Restore a testnet session that a refresh interrupted.
+      const restored = readSessionSecret();
+      if (restored) {
+        signerRef.current = restored;
+        setAddress(restored.address);
+        setConnected(true);
+        setNetwork(REQUIRED_NETWORK);
+        await fetchBalances(restored.address);
+        if (cancelled) return;
+      }
+
       const { api: freighter } = await waitForFreighter();
       if (!freighter) {
         // Silent: the user has not asked to connect yet, and a missing extension

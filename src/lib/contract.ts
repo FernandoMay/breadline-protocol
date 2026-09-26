@@ -1,5 +1,5 @@
 import * as StellarSdk from '@stellar/stellar-sdk';
-import { sorobanServer, NETWORK_PASSPHRASE } from './stellar';
+import { server as horizonServer, sorobanServer, NETWORK_PASSPHRASE } from './stellar';
 import { getActiveEscrowId } from './activeEscrow';
 
 export { ESCROW_CONTRACT_ID } from './stellar';
@@ -171,16 +171,24 @@ export async function isContractUnused(contractId: string): Promise<boolean> {
 
 // ─── Build + sign + submit helpers ───
 
+/**
+ * Build a transaction that will be **submitted**, so it needs a real source
+ * account and a current sequence number.
+ *
+ * The previous version used a placeholder source with sequence `0`, which is
+ * only valid for a read-only simulation. Submitting it made the network reject
+ * every action with `txBadSeq`, so create/fund/release/refund/dispute could
+ * never complete from the app even though the contract itself was correct.
+ */
 async function buildInvokeTx(
   method: string,
   contractId: string,
+  sourceAddress: string,
   ...args: StellarSdk.xdr.ScVal[]
 ): Promise<StellarSdk.Transaction> {
   const contract = new StellarSdk.Contract(contractId);
-  const source = new StellarSdk.Account(
-    'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF',
-    '0'
-  );
+  const sequence = await readSequenceNumber(sourceAddress);
+  const source = new StellarSdk.Account(sourceAddress, sequence);
 
   const tx = new StellarSdk.TransactionBuilder(source, {
     fee: StellarSdk.BASE_FEE,
@@ -250,6 +258,7 @@ export async function createEscrowOnChain(
   const tx = await buildInvokeTx(
     'create_escrow',
     contractId,
+    buyerAddress,
     StellarSdk.nativeToScVal(buyerAddress, { type: 'address' }),
     StellarSdk.nativeToScVal(sellerAddress, { type: 'address' }),
     StellarSdk.nativeToScVal(tokenAddress, { type: 'address' }),
@@ -261,18 +270,20 @@ export async function createEscrowOnChain(
 }
 
 export async function fundEscrowOnChain(
+  sourceAddress: string,
   signTransaction: (xdr: string) => Promise<string | null>,
   contractId: string = getActiveEscrowId(),
 ) {
-  const tx = await buildInvokeTx('fund_escrow', contractId);
+  const tx = await buildInvokeTx('fund_escrow', contractId, sourceAddress);
   return signAndSubmit(tx, signTransaction);
 }
 
 export async function releaseFundsOnChain(
+  sourceAddress: string,
   signTransaction: (xdr: string) => Promise<string | null>,
   contractId: string = getActiveEscrowId(),
 ) {
-  const tx = await buildInvokeTx('release_funds', contractId);
+  const tx = await buildInvokeTx('release_funds', contractId, sourceAddress);
   return signAndSubmit(tx, signTransaction);
 }
 
@@ -284,6 +295,7 @@ export async function refundEscrowOnChain(
   const tx = await buildInvokeTx(
     'refund_buyer',
     contractId,
+    callerAddress,
     StellarSdk.nativeToScVal(callerAddress, { type: 'address' }),
   );
   return signAndSubmit(tx, signTransaction);
@@ -297,16 +309,18 @@ export async function raiseDisputeOnChain(
   const tx = await buildInvokeTx(
     'raise_dispute',
     contractId,
+    callerAddress,
     StellarSdk.nativeToScVal(callerAddress, { type: 'address' }),
   );
   return signAndSubmit(tx, signTransaction);
 }
 
 export async function autoRefundIfExpiredOnChain(
+  sourceAddress: string,
   signTransaction: (xdr: string) => Promise<string | null>,
   contractId: string = getActiveEscrowId(),
 ) {
-  const tx = await buildInvokeTx('auto_refund_if_expired', contractId);
+  const tx = await buildInvokeTx('auto_refund_if_expired', contractId, sourceAddress);
   return signAndSubmit(tx, signTransaction);
 }
 
@@ -467,6 +481,24 @@ interface SubmitOutcome {
  * The account is re-read on every attempt: the sequence number is only known
  * from the network, and a stale one makes the transaction fail at submission.
  */
+/** Bounded retries for the transient `TRY_AGAIN_LATER` throttle. */
+const TRY_AGAIN_LATER_RETRIES = 3;
+const TRY_AGAIN_LATER_BACKOFF_MS = 2500;
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** Read an account's next sequence number from Horizon, with a Soroban RPC fallback. */
+async function readSequenceNumber(address: string): Promise<string> {
+  try {
+    const acc = await horizonServer.loadAccount(address);
+    return acc.sequenceNumber();
+  } catch (err) {
+    const viaSoroban = await sorobanServer.getAccount(address);
+    if (!viaSoroban) throw err;
+    return viaSoroban.sequenceNumber();
+  }
+}
+
 async function submitSorobanTx(
   build: (account: StellarSdk.Account) => StellarSdk.Transaction,
   signTransaction: (xdr: string) => Promise<string | null>,
@@ -475,10 +507,14 @@ async function submitSorobanTx(
 ): Promise<SubmitOutcome> {
   let lastError = '';
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < 1 + TRY_AGAIN_LATER_RETRIES; attempt += 1) {
     let account: StellarSdk.Account;
     try {
-      account = await sorobanServer.getAccount(sourceAddress);
+      // Horizon is the source of truth for account sequence numbers. The Soroban
+      // RPC can serve a cached account, and a stale sequence is rejected with
+      // txBadSeq, which is exactly the failure this deploy path kept hitting.
+      const sequence = await readSequenceNumber(sourceAddress);
+      account = new StellarSdk.Account(sourceAddress, sequence);
     } catch (err) {
       throw new Error(
         `No se pudo leer la cuenta ${sourceAddress} en Stellar Testnet. Pedi XLM de prueba e intentá de nuevo. (${summarizeError(err)})`,
@@ -506,16 +542,27 @@ async function submitSorobanTx(
     // `errorResult` XDR; there is no `error` string on this response.
     if (sent.status === 'ERROR') {
       lastError = describeTransactionResult(sent.errorResult) ?? sent.status;
-      if (attempt === 0 && looksLikeStaleSequence(lastError)) {
-        // Rebuild with the sequence the network actually expects.
+      // A stale sequence is retried on every attempt, not just the first: a
+      // preceding TRY_AGAIN_LATER retry can still land the transaction, which
+      // bumps the account sequence and makes the rebuilt envelope stale. The
+      // account is re-read at the top of each attempt, so rebuilding is safe.
+      if (looksLikeStaleSequence(lastError)) {
         continue;
       }
       throw new Error(`No se pudo enviar ${what}: ${lastError}`);
     }
 
     if (sent.status === 'TRY_AGAIN_LATER') {
+      // The public Testnet RPC throttles resource-heavy transactions (WASM
+      // upload in particular). It is transient, so it is retried with a short
+      // backoff instead of failing a demo on an infrastructure condition.
+      if (attempt < TRY_AGAIN_LATER_RETRIES) {
+        lastError = 'red saturada';
+        await sleep(TRY_AGAIN_LATER_BACKOFF_MS * (attempt + 1));
+        continue;
+      }
       throw new Error(
-        `La red esta saturada y pidio reintentar ${what} mas tarde (${sent.status}). Intentalo de nuevo en unos segundos.`,
+        `La red de testnet sigue saturada y pidio reintentar ${what} mas tarde (${sent.status}). Intentalo de nuevo en unos segundos.`,
       );
     }
 
@@ -566,12 +613,16 @@ export async function deployEscrowContract(
     'la carga del WASM',
   );
 
-  // Without `crypto.subtle` the id is unknown up front, so tx1 must be in a
-  // ledger before its return value can be read.
+  // tx1 must be in a ledger before tx2 is built, for two independent reasons:
+  // the account sequence has to advance past tx1, otherwise tx2 is rejected with
+  // txBadSeq; and without `crypto.subtle` the id can only be read from tx1's
+  // return value. The early exit used to skip the wait whenever the id was
+  // computed locally, which is exactly when the sequence was still stale.
+  onProgress?.('confirming');
+  await waitForLedger(upload.hash, 'la carga del WASM');
+  uploadPending = true;
+
   if (!wasmId) {
-    onProgress?.('confirming');
-    await waitForLedger(upload.hash, 'la carga del WASM');
-    uploadPending = true;
     wasmId = await readWasmIdFromUpload(upload.hash);
     if (!wasmId) {
       throw new Error(

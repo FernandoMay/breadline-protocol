@@ -158,7 +158,7 @@ export default function SalaEntrega() {
     if (!signTransaction) return;
     setActionLoading('release');
     try {
-      const result = await releaseFundsOnChain(signTransaction, activeContractId);
+      const result = await releaseFundsOnChain(address, signTransaction, activeContractId);
       if (result.success) {
         setShowReleaseModal(false);
         await refreshAfterAction();
@@ -210,7 +210,7 @@ export default function SalaEntrega() {
     if (!signTransaction) return;
     setActionLoading('auto-refund');
     try {
-      const result = await autoRefundIfExpiredOnChain(signTransaction, activeContractId);
+      const result = await autoRefundIfExpiredOnChain(address, signTransaction, activeContractId);
       if (result.success) {
         await refreshAfterAction();
       } else {

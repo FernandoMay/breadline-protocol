@@ -402,7 +402,7 @@ export default function VistaComprador() {
     setFundError(null);
 
     try {
-      const result = await fundEscrowOnChain(wallet.signTransaction, activeContractId);
+      const result = await fundEscrowOnChain(wallet.address, wallet.signTransaction, activeContractId);
       if (result.success) {
         setFundStatus('success');
         // Re-fetch escrow to update state

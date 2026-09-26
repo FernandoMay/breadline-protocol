@@ -124,7 +124,7 @@ export default function DisputasArbitraje() {
     setError('');
     setSuccessMsg('');
     try {
-      const result = await releaseFundsOnChain(wallet.signTransaction, activeContractId);
+      const result = await releaseFundsOnChain(wallet.address, wallet.signTransaction, activeContractId);
       if (result.success) {
         setSuccessMsg('Funds released to seller on-chain.');
         await loadEscrow();
